@@ -193,12 +193,12 @@ def verify_magic():
     with db() as c:
         row = c.execute('SELECT email FROM magic_tokens WHERE token=? AND used=0 AND expires_at>?',
                         (token, now_str())).fetchone()
-    if not row: return redirect('/login.html?error=expired')
+    if not row: return redirect(BASE_URL + '/login.html?error=expired')
     with db() as c:
         c.execute('UPDATE magic_tokens SET used=1 WHERE token=?', (token,))
         em = c.execute('SELECT name FROM emails WHERE email=?', (row['email'],)).fetchone()
     name = (em['name'] if em and em['name'] else row['email'])
-    resp = make_response(redirect('/'))
+    resp = make_response(redirect(BASE_URL + '/'))
     return set_session_cookie(resp, make_session(name, row['email'], 'email'))
 
 # ── Invite link ───────────────────────────────────────────────────────────────
@@ -208,12 +208,12 @@ def verify_link():
     with db() as c:
         row = c.execute('SELECT name FROM links WHERE key=? AND (expires_at IS NULL OR expires_at>?)',
                         (key, now_str())).fetchone()
-    if not row: return redirect('/login.html?error=invalid')
+    if not row: return redirect(BASE_URL + '/login.html?error=invalid')
     with db() as c:
         c.execute('UPDATE links SET last_used=? WHERE key=?', (now_str(), key))
     name = row['name'] or key
     ref  = f'link:{key}'
-    resp = make_response(redirect('/'))
+    resp = make_response(redirect(BASE_URL + '/'))
     return set_session_cookie(resp, make_session(name, ref, 'link'))
 
 # ── Logout ────────────────────────────────────────────────────────────────────
@@ -223,7 +223,7 @@ def logout():
     if token:
         with db() as c:
             c.execute('DELETE FROM sessions WHERE token=?', (token,))
-    resp = make_response(redirect('/login.html'))
+    resp = make_response(redirect(BASE_URL + '/login.html'))
     resp.delete_cookie('st', path='/')
     return resp
 
