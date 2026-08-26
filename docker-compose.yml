@@ -1,0 +1,26 @@
+services:
+  ome:
+    image: airensoft/ovenmediaengine:latest
+    restart: always
+    network_mode: host
+    environment:
+      - OME_HOST_IP=${OME_HOST_IP}
+      - TZ=${TZ:-Europe/Vienna}
+    volumes:
+      - ./config:/opt/ovenmediaengine/bin/origin_conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    extra_hosts:
+      - "host-gateway:host-gateway"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+      - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
+      - ./nginx/certbot-webroot:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro

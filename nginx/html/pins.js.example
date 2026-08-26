@@ -1,0 +1,6 @@
+// Copy to pins.js — this file is gitignored
+// Generate a hash: echo -n "YOUR_PIN" | sha256sum | cut -d' ' -f1
+// Then add it to the array below. Multiple PINs are supported.
+window.PINS = [
+  // "abc123..." SHA-256 hash of your PIN goes here
+];

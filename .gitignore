@@ -1,0 +1,5 @@
+.env
+nginx/html/pins.js
+nginx/html/config.js
+nginx/nginx.conf
+nginx/htpasswd

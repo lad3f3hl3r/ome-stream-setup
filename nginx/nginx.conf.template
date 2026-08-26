@@ -1,0 +1,36 @@
+server {
+    listen 80;
+    server_name @@DOMAIN@@;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}
+server {
+    listen 443 ssl;
+    server_name @@DOMAIN@@;
+    ssl_certificate     /etc/letsencrypt/live/@@DOMAIN@@/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/@@DOMAIN@@/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    root  /usr/share/nginx/html;
+    index index.html;
+
+    location /api/streams {
+        proxy_pass http://host-gateway:8081/v1/vhosts/default/apps/live/streams;
+        proxy_set_header Authorization "Basic @@OME_API_TOKEN_B64@@";
+        proxy_hide_header Authorization;
+        add_header Cache-Control "no-store";
+    }
+
+    location ~ ^/api/stream/(.+)$ {
+        proxy_pass http://host-gateway:8081/v1/vhosts/default/apps/live/streams/$1;
+        proxy_set_header Authorization "Basic @@OME_API_TOKEN_B64@@";
+        proxy_hide_header Authorization;
+        add_header Cache-Control "no-store";
+    }
+
+    location ~ ^/s/(.+)$ {
+        return 302 /?stream=$1;
+    }
+
+    location / { try_files $uri $uri/ =404; }
+}
