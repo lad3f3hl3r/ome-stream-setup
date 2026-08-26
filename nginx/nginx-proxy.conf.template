@@ -43,22 +43,18 @@ server {
         try_files $uri =404;
     }
 
-    # ── OME stream list API ───────────────────────────────────────────────────
+    # ── OME stream API (auth + permission filtering handled by auth service) ─────
     location /api/streams {
-        auth_request /auth/check;
-        error_page 401 = @login_redirect;
-        proxy_pass http://host-gateway:8081/v1/vhosts/default/apps/live/streams;
-        proxy_set_header Authorization "Basic @@OME_API_TOKEN_B64@@";
-        proxy_hide_header Authorization;
+        proxy_pass http://auth:5000/api/streams;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header X-Real-IP $remote_addr;
         add_header Cache-Control "no-store";
     }
 
     location ~ ^/api/stream/(.+)$ {
-        auth_request /auth/check;
-        error_page 401 = @login_redirect;
-        proxy_pass http://host-gateway:8081/v1/vhosts/default/apps/live/streams/$1;
-        proxy_set_header Authorization "Basic @@OME_API_TOKEN_B64@@";
-        proxy_hide_header Authorization;
+        proxy_pass http://auth:5000/api/stream/$1;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header X-Real-IP $remote_addr;
         add_header Cache-Control "no-store";
     }
 

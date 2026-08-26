@@ -126,13 +126,9 @@ cp docker-compose.yml "$INSTALL_DIR/"
 
 # ── Generate nginx.conf ───────────────────────────────────────────────────────
 info "Generating nginx.conf (TLS_MODE=$TLS_MODE)"
-TOKEN_B64=$(printf '%s' "$OME_API_TOKEN" | base64 | tr -d '\n')
 TEMPLATE="nginx/nginx.conf.template"
 [[ "$TLS_MODE" == "proxy" ]] && TEMPLATE="nginx/nginx-proxy.conf.template"
-sed \
-  -e "s|@@DOMAIN@@|$DOMAIN|g" \
-  -e "s|@@OME_API_TOKEN_B64@@|$TOKEN_B64|g" \
-  "$TEMPLATE" > "$INSTALL_DIR/nginx/nginx.conf"
+sed "s|@@DOMAIN@@|$DOMAIN|g" "$TEMPLATE" > "$INSTALL_DIR/nginx/nginx.conf"
 
 # ── Generate Server.xml ───────────────────────────────────────────────────────
 info "Generating Server.xml"

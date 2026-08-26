@@ -10,19 +10,18 @@ body{background:#0f0f0f;color:#eee;font-family:-apple-system,BlinkMacSystemFont,
 h1{font-size:1.1rem;font-weight:600;color:#ccc;margin-bottom:32px;display:flex;align-items:center;gap:10px}
 h1 span{width:9px;height:9px;border-radius:50%;background:#c00;display:inline-block;animation:blink 1.5s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-.section{background:#1a1a1a;border:1px solid #252525;border-radius:12px;padding:24px;margin-bottom:24px;max-width:800px}
+.section{background:#1a1a1a;border:1px solid #252525;border-radius:12px;padding:24px;margin-bottom:24px;max-width:900px}
 h2{font-size:.85rem;font-weight:600;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px}
 .row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-input{padding:9px 12px;background:#111;border:1px solid #222;border-radius:6px;color:#eee;font-size:.85rem;outline:none;flex:1;min-width:140px}
+input[type=text],input[type=email],input[type=number]{padding:9px 12px;background:#111;border:1px solid #222;border-radius:6px;color:#eee;font-size:.85rem;outline:none;flex:1;min-width:140px}
 input:focus{border-color:#444}
 .btn{padding:9px 16px;border:none;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:500;white-space:nowrap}
-.btn-primary{background:#c00;color:#fff}
-.btn-primary:hover{background:#d00}
+.btn-primary{background:#c00;color:#fff}.btn-primary:hover{background:#d00}
 .btn-sm{padding:5px 10px;font-size:.78rem}
-.btn-ghost{background:#222;color:#999}
-.btn-ghost:hover{background:#2a2a2a;color:#ccc}
-.btn-danger{background:#3a1111;color:#c55}
-.btn-danger:hover{background:#4a1515;color:#e55}
+.btn-ghost{background:#222;color:#999}.btn-ghost:hover{background:#2a2a2a;color:#ccc}
+.btn-danger{background:#3a1111;color:#c55}.btn-danger:hover{background:#4a1515;color:#e55}
+.btn-perm{background:#1a2a1a;color:#6ac060;border:1px solid #2a4a2a;padding:4px 10px;border-radius:4px;font-size:.78rem;cursor:pointer}
+.btn-perm:hover{background:#243a24}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:.75rem;color:#555;letter-spacing:1px;text-transform:uppercase;padding:0 8px 10px 0;border-bottom:1px solid #222}
 td{padding:10px 8px 10px 0;border-bottom:1px solid #1a1a1a;font-size:.85rem;vertical-align:middle}
@@ -31,9 +30,26 @@ td:last-child{text-align:right}
 .tag-email{background:#1a2a3a;color:#6ab0e0}
 .tag-link{background:#1a2a1a;color:#6ac060}
 .empty{color:#444;font-size:.85rem;text-align:center;padding:20px 0}
-.url-cell{font-family:monospace;font-size:.78rem;color:#888;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.url-cell{font-family:monospace;font-size:.78rem;color:#888;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .copy-btn{cursor:pointer;font-size:.78rem;color:#666;padding:2px 6px;border:1px solid #333;border-radius:4px;background:transparent}
 .copy-btn:hover{color:#ccc;border-color:#555}
+/* Permission panel */
+.perm-panel{display:none;background:#111;border:1px solid #222;border-radius:8px;padding:16px;margin-top:8px;margin-bottom:4px}
+.perm-panel.open{display:block}
+.perm-label{font-size:.75rem;color:#666;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
+.perm-options{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.perm-chip{display:inline-flex;align-items:center;gap:5px;background:#1e1e1e;border:1px solid #333;border-radius:16px;padding:4px 10px;font-size:.8rem;color:#bbb}
+.perm-chip button{background:none;border:none;color:#666;cursor:pointer;font-size:.9rem;line-height:1;padding:0}
+.perm-chip button:hover{color:#c55}
+.perm-add-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.perm-add-row input{flex:1;min-width:120px;padding:6px 10px;background:#111;border:1px solid #2a2a2a;border-radius:6px;color:#eee;font-size:.82rem;outline:none}
+.perm-add-row input:focus{border-color:#444}
+.stream-pick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.stream-pick button{padding:4px 10px;border:1px solid #2a2a2a;border-radius:14px;background:transparent;color:#888;font-size:.78rem;cursor:pointer}
+.stream-pick button:hover{border-color:#555;color:#ccc}
+.stream-pick button.sel{background:#1e3a2a;border-color:#2a6a4a;color:#4caf7d}
+.all-chip{background:#1a2a3a;border-color:#2a4a6a;color:#6ab0e0}
+/* Toast */
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1e3a2a;border:1px solid #2a6a4a;color:#4caf7d;padding:10px 20px;border-radius:8px;font-size:.85rem;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
 .toast.show{opacity:1}
 </style>
@@ -46,7 +62,7 @@ td:last-child{text-align:right}
   <div class="row">
     <input id="email-email" type="email" placeholder="email@example.com">
     <input id="email-name" type="text" placeholder="Display name (optional)">
-    <button class="btn btn-primary" onclick="addEmail()">Add email</button>
+    <button class="btn btn-primary" onclick="addEmail()">Add + send invite</button>
   </div>
   <table id="emails-table"><tr><td class="empty">Loading…</td></tr></table>
 </div>
@@ -69,18 +85,124 @@ td:last-child{text-align:right}
 
 <script>
 const api = (path, opts={}) => fetch('/auth/admin' + path, {headers:{'Content-Type':'application/json'}, ...opts}).then(r=>r.json());
-const rel = iso => { if(!iso) return '—'; const d=new Date(iso+'Z'); return d.toLocaleString(); };
+const rel = iso => { if(!iso) return '—'; return new Date(iso+'Z').toLocaleString(); };
+
+let activeStreams = [];
+let openPanel = null;  // currently open permission panel ref
+
+// ── Fetch active streams for permission picker ────────────────────────────────
+async function refreshActiveStreams(){
+  activeStreams = await api('/streams').catch(()=>[]);
+}
+
+// ── Permission panel ──────────────────────────────────────────────────────────
+async function togglePerm(ref, btnEl){
+  const panelId = 'perm-' + btoa(ref).replace(/[^a-z0-9]/gi,'');
+  let panel = document.getElementById(panelId);
+  if(panel && panel.classList.contains('open')){
+    panel.classList.remove('open'); openPanel=null; return;
+  }
+  if(openPanel){ const op=document.getElementById(openPanel); if(op) op.classList.remove('open'); }
+  openPanel = panelId;
+  if(!panel){
+    panel = document.createElement('div');
+    panel.id = panelId;
+    panel.className = 'perm-panel';
+    btnEl.closest('tr').insertAdjacentElement('afterend',
+      Object.assign(document.createElement('tr'), {innerHTML:`<td colspan="5" style="padding:0 0 8px 0"><div id="${panelId}" class="perm-panel"></div></td>`})
+    );
+    panel = document.getElementById(panelId);
+  }
+  panel.classList.add('open');
+  await renderPermPanel(ref, panel);
+}
+
+async function renderPermPanel(ref, panel){
+  await refreshActiveStreams();
+  const current = await api('/permissions/'+encodeURIComponent(ref));
+  const isAll = current.includes('*');
+  const specific = current.filter(s=>s!=='*');
+
+  panel.innerHTML = `
+    <div class="perm-label">Stream access for <strong style="color:#ccc">${ref}</strong></div>
+    <div class="stream-pick" id="pick-${panel.id}">
+      <button class="btn ${isAll?'sel all-chip':''}" onclick="toggleAll('${panel.id}','${ref}',this)">★ All streams</button>
+      ${activeStreams.map(s=>`<button class="${specific.includes(s)?'sel':''}" onclick="toggleStream('${panel.id}','${ref}','${s}',this)">${s.replace(/_/g,' ')}</button>`).join('')}
+    </div>
+    <div class="perm-label" style="margin-top:10px">Custom / future streams</div>
+    <div id="chips-${panel.id}" class="perm-options">
+      ${specific.filter(s=>!activeStreams.includes(s)).map(s=>chipHtml(panel.id,ref,s)).join('')}
+    </div>
+    <div class="perm-add-row">
+      <input id="add-${panel.id}" placeholder="Type stream name (e.g. Stage_A)" onkeydown="if(event.key==='Enter')addCustomStream('${panel.id}','${ref}')">
+      <button class="btn btn-ghost btn-sm" onclick="addCustomStream('${panel.id}','${ref}')">Add</button>
+    </div>
+  `;
+}
+
+function chipHtml(panelId, ref, stream){
+  return `<span class="perm-chip">${stream.replace(/_/g,' ')}<button onclick="removeCustomStream('${panelId}','${ref}','${stream}',this)" title="Remove">✕</button></span>`;
+}
+
+function getPickerState(panelId){
+  const pick = document.getElementById('pick-'+panelId);
+  const allBtn = pick.querySelector('button:first-child');
+  if(allBtn.classList.contains('sel')) return ['*'];
+  const active = [...pick.querySelectorAll('button:not(:first-child)')].filter(b=>b.classList.contains('sel')).map(b=>b.textContent.trim().replace(/ /g,'_'));
+  const chips = [...(document.getElementById('chips-'+panelId)?.querySelectorAll('.perm-chip')||[])].map(c=>c.textContent.trim().replace('✕','').trim().replace(/ /g,'_'));
+  return [...new Set([...active,...chips])];
+}
+
+async function savePerms(panelId, ref){
+  const streams = getPickerState(panelId);
+  await api('/permissions/'+encodeURIComponent(ref), {method:'POST', body:JSON.stringify({streams})});
+  showToast('Access updated');
+}
+
+async function toggleAll(panelId, ref, btn){
+  const isNowAll = !btn.classList.contains('sel');
+  btn.classList.toggle('sel', isNowAll);
+  // deselect specific streams if all selected
+  if(isNowAll) document.querySelectorAll(`#pick-${panelId} button:not(:first-child)`).forEach(b=>b.classList.remove('sel'));
+  await savePerms(panelId, ref);
+  await renderPermPanel(ref, document.getElementById(panelId));
+}
+
+async function toggleStream(panelId, ref, stream, btn){
+  const allBtn = document.querySelector(`#pick-${panelId} button:first-child`);
+  allBtn.classList.remove('sel');
+  btn.classList.toggle('sel');
+  await savePerms(panelId, ref);
+}
+
+async function addCustomStream(panelId, ref){
+  const inp = document.getElementById('add-'+panelId);
+  const val = inp.value.trim();
+  if(!val) return;
+  inp.value = '';
+  const allBtn = document.querySelector(`#pick-${panelId} button:first-child`);
+  allBtn.classList.remove('sel');
+  const chips = document.getElementById('chips-'+panelId);
+  chips.insertAdjacentHTML('beforeend', chipHtml(panelId, ref, val));
+  await savePerms(panelId, ref);
+}
+
+async function removeCustomStream(panelId, ref, stream, btn){
+  btn.closest('.perm-chip').remove();
+  await savePerms(panelId, ref);
+}
 
 // ── Emails ────────────────────────────────────────────────────────────────────
 async function loadEmails(){
   const rows = await api('/emails');
   const t = document.getElementById('emails-table');
-  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="4">No authorized emails yet.</td></tr>'; return; }
-  t.innerHTML = `<tr><th>Email</th><th>Name</th><th>Added</th><th></th></tr>` +
+  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="5">No authorized emails yet.</td></tr>'; return; }
+  t.innerHTML = `<tr><th>Email</th><th>Name</th><th>Added</th><th>Access</th><th></th></tr>` +
     rows.map(r=>`<tr>
       <td>${r.email}</td>
       <td>${r.name||'—'}</td>
       <td>${rel(r.created_at)}</td>
+      <td><button class="btn-perm" onclick="togglePerm('${r.email}',this)">Streams ▾</button></td>
       <td style="display:flex;gap:6px;justify-content:flex-end">
         <button class="btn btn-sm btn-ghost" onclick="resendWelcome('${r.email}',this)">Resend link</button>
         <button class="btn btn-sm btn-danger" onclick="delEmail('${r.email}')">Remove</button>
@@ -104,8 +226,7 @@ async function resendWelcome(email, btn){
   btn.disabled=true; btn.textContent='Sending…';
   const d = await api('/emails/'+encodeURIComponent(email)+'/resend', {method:'POST'});
   btn.disabled=false; btn.textContent='Resend link';
-  if(d.ok) showToast(`Sign-in link resent to ${email}`);
-  else showToast(`Failed: ${d.error||'unknown error'}`);
+  showToast(d.ok ? `Sign-in link resent to ${email}` : `Failed: ${d.error||'unknown'}`);
 }
 
 async function delEmail(email){
@@ -118,15 +239,14 @@ async function delEmail(email){
 async function loadLinks(){
   const rows = await api('/links');
   const t = document.getElementById('links-table');
-  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="5">No invite links yet.</td></tr>'; return; }
-  t.innerHTML = `<tr><th>Name</th><th>Link</th><th>Expires</th><th>Last used</th><th></th></tr>` +
+  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="6">No invite links yet.</td></tr>'; return; }
+  t.innerHTML = `<tr><th>Name</th><th>Link</th><th>Expires</th><th>Last used</th><th>Access</th><th></th></tr>` +
     rows.map(r=>`<tr>
       <td>${r.name||'—'}</td>
-      <td class="url-cell" title="${r.url}">
-        ${r.url} <button class="copy-btn" onclick="copy('${r.url}',this)">copy</button>
-      </td>
+      <td class="url-cell" title="${r.url}">${r.url} <button class="copy-btn" onclick="copy('${r.url}',this)">copy</button></td>
       <td>${rel(r.expires_at)}</td>
       <td>${rel(r.last_used)}</td>
+      <td><button class="btn-perm" onclick="togglePerm('link:${r.key}',this)">Streams ▾</button></td>
       <td><button class="btn btn-sm btn-danger" onclick="delLink('${r.key}')">Revoke</button></td>
     </tr>`).join('');
 }
@@ -142,7 +262,7 @@ async function createLink(){
 }
 
 async function delLink(key){
-  if(!confirm('Revoke this invite link? Active sessions for it will be ended.')) return;
+  if(!confirm('Revoke this invite link? Active sessions will be ended.')) return;
   await api('/links/'+key, {method:'DELETE'});
   loadLinks(); loadSessions();
 }
@@ -169,7 +289,8 @@ async function revokeSession(token){
 
 function copy(url, btn){
   navigator.clipboard.writeText(url).then(()=>{
-    if(btn){ btn.textContent='copied!'; setTimeout(()=>btn.textContent='copy', 1500); }
+    if(btn){ btn.textContent='copied!'; setTimeout(()=>btn.textContent='copy',1500); }
+    else showToast('Link copied to clipboard');
   });
 }
 
@@ -181,7 +302,7 @@ function showToast(msg){
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
 }
 
-loadEmails(); loadLinks(); loadSessions();
+loadEmails(); loadLinks(); loadSessions(); refreshActiveStreams();
 </script>
 </body>
 </html>

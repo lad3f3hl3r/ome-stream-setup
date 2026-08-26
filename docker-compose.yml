@@ -13,6 +13,8 @@ services:
   auth:
     build: ./auth
     restart: always
+    extra_hosts:
+      - "host-gateway:host-gateway"
     environment:
       - DB_PATH=/data/auth.db
       - BASE_URL=https://${DOMAIN}
@@ -26,6 +28,10 @@ services:
       - MAGIC_LINK_EXPIRE_MINUTES=${MAGIC_LINK_EXPIRE_MINUTES:-15}
       - SESSION_EXPIRE_DAYS=${SESSION_EXPIRE_DAYS:-7}
       - WELCOME_LINK_EXPIRE_HOURS=${WELCOME_LINK_EXPIRE_HOURS:-72}
+      - STREAM_SECRET=${STREAM_SECRET}
+      - STREAM_SEPARATOR=${STREAM_SEPARATOR:-~}
+      - OME_API_URL=http://host-gateway:8081
+      - OME_API_TOKEN=${OME_API_TOKEN}
     volumes:
       - auth_data:/data
 

@@ -1,23 +1,30 @@
-import os, secrets, sqlite3, smtplib, logging
+import os, secrets, sqlite3, smtplib, logging, json
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
+from urllib.request import Request, urlopen
+from urllib.error import URLError
+from base64 import b64encode
 from flask import Flask, request, jsonify, redirect, make_response, abort
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-DB_PATH    = os.getenv('DB_PATH', '/data/auth.db')
-BASE_URL   = os.getenv('BASE_URL', 'https://stream.example.com')
-SMTP_HOST  = os.getenv('SMTP_HOST', 'localhost')
-SMTP_PORT  = int(os.getenv('SMTP_PORT', '587'))
-SMTP_USER  = os.getenv('SMTP_USER', '')
-SMTP_PASS  = os.getenv('SMTP_PASS', '')
-SMTP_FROM  = os.getenv('SMTP_FROM', 'noreply@example.com')
-SMTP_SSL   = os.getenv('SMTP_SSL', 'false').lower() == 'true'   # true = SMTPS port 465
-SMTP_TLS   = os.getenv('SMTP_TLS', 'true').lower() == 'true'    # true = STARTTLS port 587
-LINK_TTL   = int(os.getenv('MAGIC_LINK_EXPIRE_MINUTES', '15'))
-SESSION_TTL= int(os.getenv('SESSION_EXPIRE_DAYS', '7'))
-WELCOME_TTL= int(os.getenv('WELCOME_LINK_EXPIRE_HOURS', '72')) * 60  # in minutes
+DB_PATH     = os.getenv('DB_PATH', '/data/auth.db')
+BASE_URL    = os.getenv('BASE_URL', 'https://stream.example.com')
+SMTP_HOST   = os.getenv('SMTP_HOST', 'localhost')
+SMTP_PORT   = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USER   = os.getenv('SMTP_USER', '')
+SMTP_PASS   = os.getenv('SMTP_PASS', '')
+SMTP_FROM   = os.getenv('SMTP_FROM', 'noreply@example.com')
+SMTP_SSL    = os.getenv('SMTP_SSL', 'false').lower() == 'true'
+SMTP_TLS    = os.getenv('SMTP_TLS', 'true').lower() == 'true'
+LINK_TTL    = int(os.getenv('MAGIC_LINK_EXPIRE_MINUTES', '15'))
+SESSION_TTL = int(os.getenv('SESSION_EXPIRE_DAYS', '7'))
+WELCOME_TTL = int(os.getenv('WELCOME_LINK_EXPIRE_HOURS', '72')) * 60
+STREAM_SECRET = os.getenv('STREAM_SECRET', '')
+STREAM_SEP    = os.getenv('STREAM_SEPARATOR', '~')
+OME_API_URL   = os.getenv('OME_API_URL', 'http://host-gateway:8081')
+OME_API_TOKEN = os.getenv('OME_API_TOKEN', '')
 
 # ── Database ──────────────────────────────────────────────────────────────────
 def db():
@@ -51,11 +58,17 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sessions (
             token      TEXT PRIMARY KEY,
             name       TEXT,
+            ref        TEXT,
             source     TEXT,
             expires_at TEXT,
             last_seen  TEXT,
             ip         TEXT,
             created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS permissions (
+            ref    TEXT NOT NULL,
+            stream TEXT NOT NULL,
+            PRIMARY KEY (ref, stream)
         );
         ''')
 
@@ -65,11 +78,11 @@ def now_str(): return datetime.utcnow().isoformat()
 def future(days=0, minutes=0):
     return (datetime.utcnow() + timedelta(days=days, minutes=minutes)).isoformat()
 
-def make_session(name, source):
+def make_session(name, ref, source):
     token = secrets.token_urlsafe(32)
     with db() as c:
-        c.execute('INSERT INTO sessions (token,name,source,expires_at,last_seen,ip) VALUES (?,?,?,?,?,?)',
-                  (token, name, source, future(days=SESSION_TTL), now_str(), request.remote_addr))
+        c.execute('INSERT INTO sessions (token,name,ref,source,expires_at,last_seen,ip) VALUES (?,?,?,?,?,?,?)',
+                  (token, name, ref, source, future(days=SESSION_TTL), now_str(), request.remote_addr))
     return token
 
 def set_session_cookie(resp, token):
@@ -77,42 +90,96 @@ def set_session_cookie(resp, token):
                     max_age=SESSION_TTL * 86400, path='/')
     return resp
 
+def get_session():
+    token = request.cookies.get('st')
+    if not token: return None
+    with db() as c:
+        row = c.execute('SELECT * FROM sessions WHERE token=? AND expires_at>?',
+                        (token, now_str())).fetchone()
+    if row:
+        with db() as c:
+            c.execute('UPDATE sessions SET last_seen=? WHERE token=?', (now_str(), token))
+    return row
+
+# ── OME API helper ────────────────────────────────────────────────────────────
+def ome_get(path):
+    token_b64 = b64encode(OME_API_TOKEN.encode()).decode()
+    req = Request(f"{OME_API_URL}{path}", headers={'Authorization': f'Basic {token_b64}'})
+    try:
+        with urlopen(req, timeout=5) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        app.logger.error(f"OME API error {path}: {e}")
+        return None
+
+# ── Stream permission helpers ─────────────────────────────────────────────────
+def get_allowed_streams(ref):
+    with db() as c:
+        rows = c.execute('SELECT stream FROM permissions WHERE ref=?', (ref,)).fetchall()
+    if not rows:
+        return None  # None = no restrictions (all streams)
+    allowed = {r['stream'] for r in rows}
+    return allowed  # '*' in set means all; otherwise specific names
+
+def display_key(full_key):
+    prefix = STREAM_SECRET + STREAM_SEP
+    return full_key[len(prefix):] if full_key.startswith(prefix) else full_key
+
+def filter_stream_list(full_keys, allowed):
+    if allowed is None or '*' in allowed:
+        return full_keys
+    return [k for k in full_keys if display_key(k) in allowed]
+
 # ── Auth check (nginx auth_request) ──────────────────────────────────────────
 @app.route('/auth/check')
 def auth_check():
-    token = request.cookies.get('st')
-    if not token: abort(401)
-    with db() as c:
-        row = c.execute('SELECT token FROM sessions WHERE token=? AND expires_at>?',
-                        (token, now_str())).fetchone()
-    if not row: abort(401)
-    with db() as c:
-        c.execute('UPDATE sessions SET last_seen=? WHERE token=?', (now_str(), token))
+    if not get_session(): abort(401)
     return '', 200
+
+# ── Stream list (session-authenticated + permission-filtered) ─────────────────
+@app.route('/api/streams')
+def api_streams():
+    session = get_session()
+    if not session: abort(401)
+    data = ome_get('/v1/vhosts/default/apps/live/streams')
+    if not data:
+        return jsonify(message='OK', response=[], statusCode=200)
+    allowed = get_allowed_streams(session['ref'])
+    filtered = filter_stream_list(data.get('response', []), allowed)
+    return jsonify(message='OK', response=filtered, statusCode=200)
+
+@app.route('/api/stream/<path:full_key>')
+def api_stream_detail(full_key):
+    session = get_session()
+    if not session: abort(401)
+    allowed = get_allowed_streams(session['ref'])
+    if allowed is not None and '*' not in allowed and display_key(full_key) not in allowed:
+        abort(403)
+    data = ome_get(f'/v1/vhosts/default/apps/live/streams/{full_key}')
+    if not data: abort(404)
+    return jsonify(data)
 
 # ── Magic link ────────────────────────────────────────────────────────────────
 @app.route('/auth/request-link', methods=['POST'])
 def request_link():
     email = (request.get_json(silent=True) or {}).get('email', '').strip().lower()
-    if not email:
-        return jsonify(error='Email required'), 400
+    if not email: return jsonify(error='Email required'), 400
     with db() as c:
         row = c.execute('SELECT name FROM emails WHERE email=?', (email,)).fetchone()
-    if not row:
-        return jsonify(ok=True)  # silent: don't reveal if email is authorized
+    if not row: return jsonify(ok=True)
     token = secrets.token_urlsafe(32)
     with db() as c:
         c.execute('INSERT INTO magic_tokens (token,email,expires_at) VALUES (?,?,?)',
                   (token, email, future(minutes=LINK_TTL)))
-    name = row['name'] or email
     link = f"{BASE_URL}/auth/verify-magic?token={token}"
+    name = row['name'] or email
     try:
         send_mail(email, 'Your sign-in link',
             f"Hi {name},\n\nSign in here (expires in {LINK_TTL} minutes):\n\n{link}\n\n"
             f"If you did not request this, ignore this email.")
     except Exception as e:
         app.logger.error(f"SMTP error: {e}")
-        return jsonify(error='Failed to send email. Check SMTP configuration.'), 500
+        return jsonify(error='Failed to send email.'), 500
     return jsonify(ok=True)
 
 @app.route('/auth/verify-magic')
@@ -121,14 +188,13 @@ def verify_magic():
     with db() as c:
         row = c.execute('SELECT email FROM magic_tokens WHERE token=? AND used=0 AND expires_at>?',
                         (token, now_str())).fetchone()
-    if not row:
-        return redirect('/login.html?error=expired')
+    if not row: return redirect('/login.html?error=expired')
     with db() as c:
         c.execute('UPDATE magic_tokens SET used=1 WHERE token=?', (token,))
         em = c.execute('SELECT name FROM emails WHERE email=?', (row['email'],)).fetchone()
     name = (em['name'] if em and em['name'] else row['email'])
     resp = make_response(redirect('/'))
-    return set_session_cookie(resp, make_session(name, 'email'))
+    return set_session_cookie(resp, make_session(name, row['email'], 'email'))
 
 # ── Invite link ───────────────────────────────────────────────────────────────
 @app.route('/auth/verify-link')
@@ -137,13 +203,13 @@ def verify_link():
     with db() as c:
         row = c.execute('SELECT name FROM links WHERE key=? AND (expires_at IS NULL OR expires_at>?)',
                         (key, now_str())).fetchone()
-    if not row:
-        return redirect('/login.html?error=invalid')
+    if not row: return redirect('/login.html?error=invalid')
     with db() as c:
         c.execute('UPDATE links SET last_used=? WHERE key=?', (now_str(), key))
     name = row['name'] or key
+    ref  = f'link:{key}'
     resp = make_response(redirect('/'))
-    return set_session_cookie(resp, make_session(name, 'link'))
+    return set_session_cookie(resp, make_session(name, ref, 'link'))
 
 # ── Logout ────────────────────────────────────────────────────────────────────
 @app.route('/auth/logout', methods=['POST'])
@@ -156,7 +222,7 @@ def logout():
     resp.delete_cookie('st', path='/')
     return resp
 
-# ── Admin API (protected by nginx Basic Auth) ─────────────────────────────────
+# ── Admin: emails ─────────────────────────────────────────────────────────────
 @app.route('/auth/admin/emails', methods=['GET'])
 def admin_list_emails():
     with db() as c:
@@ -169,11 +235,9 @@ def admin_add_email():
     email = d.get('email', '').strip().lower()
     name  = d.get('name', '').strip()
     if not email: return jsonify(error='Email required'), 400
-
     with db() as c:
         is_new = c.execute('SELECT 1 FROM emails WHERE email=?', (email,)).fetchone() is None
         c.execute('INSERT OR REPLACE INTO emails (email,name) VALUES (?,?)', (email, name or None))
-
     welcome_sent = False
     if is_new:
         try:
@@ -181,8 +245,8 @@ def admin_add_email():
             with db() as c:
                 c.execute('INSERT INTO magic_tokens (token,email,expires_at) VALUES (?,?,?)',
                           (token, email, future(minutes=WELCOME_TTL)))
-            link   = f"{BASE_URL}/auth/verify-magic?token={token}"
-            hours  = WELCOME_TTL // 60
+            link    = f"{BASE_URL}/auth/verify-magic?token={token}"
+            hours   = WELCOME_TTL // 60
             greeting = f"Hi {name}," if name else "Hi,"
             send_mail(email, 'You have been given access to the live stream viewer',
                 f"{greeting}\n\nYou have been added to the guest list for the live stream viewer.\n\n"
@@ -191,7 +255,6 @@ def admin_add_email():
             welcome_sent = True
         except Exception as e:
             app.logger.error(f"Welcome email error for {email}: {e}")
-
     return jsonify(ok=True, welcome_sent=welcome_sent)
 
 @app.route('/auth/admin/emails/<path:email>/resend', methods=['POST'])
@@ -199,8 +262,7 @@ def admin_resend_welcome(email):
     email = email.lower()
     with db() as c:
         row = c.execute('SELECT name FROM emails WHERE email=?', (email,)).fetchone()
-    if not row:
-        return jsonify(error='Email not found'), 404
+    if not row: return jsonify(error='Email not found'), 404
     token = secrets.token_urlsafe(32)
     with db() as c:
         c.execute('INSERT INTO magic_tokens (token,email,expires_at) VALUES (?,?,?)',
@@ -222,9 +284,11 @@ def admin_del_email(email):
     email = email.lower()
     with db() as c:
         c.execute('DELETE FROM emails WHERE email=?', (email,))
-        c.execute("DELETE FROM sessions WHERE source='email' AND name=?", (email,))
+        c.execute("DELETE FROM sessions WHERE source='email' AND ref=?", (email,))
+        c.execute("DELETE FROM permissions WHERE ref=?", (email,))
     return jsonify(ok=True)
 
+# ── Admin: invite links ───────────────────────────────────────────────────────
 @app.route('/auth/admin/links', methods=['GET'])
 def admin_list_links():
     with db() as c:
@@ -244,11 +308,14 @@ def admin_create_link():
 
 @app.route('/auth/admin/links/<key>', methods=['DELETE'])
 def admin_del_link(key):
+    ref = f'link:{key}'
     with db() as c:
         c.execute('DELETE FROM links WHERE key=?', (key,))
-        c.execute("DELETE FROM sessions WHERE source='link' AND name=(SELECT name FROM links WHERE key=?)", (key,))
+        c.execute("DELETE FROM sessions WHERE ref=?", (ref,))
+        c.execute("DELETE FROM permissions WHERE ref=?", (ref,))
     return jsonify(ok=True)
 
+# ── Admin: sessions ───────────────────────────────────────────────────────────
 @app.route('/auth/admin/sessions', methods=['GET'])
 def admin_list_sessions():
     with db() as c:
@@ -261,6 +328,33 @@ def admin_list_sessions():
 def admin_del_session(token):
     with db() as c:
         c.execute('DELETE FROM sessions WHERE token=?', (token,))
+    return jsonify(ok=True)
+
+# ── Admin: active OME streams (for permission picker) ─────────────────────────
+@app.route('/auth/admin/streams', methods=['GET'])
+def admin_list_streams():
+    data = ome_get('/v1/vhosts/default/apps/live/streams')
+    if not data: return jsonify([])
+    prefix = STREAM_SECRET + STREAM_SEP
+    streams = [k[len(prefix):] for k in data.get('response', []) if k.startswith(prefix)]
+    return jsonify(streams)
+
+# ── Admin: permissions ────────────────────────────────────────────────────────
+@app.route('/auth/admin/permissions/<path:ref>', methods=['GET'])
+def admin_get_permissions(ref):
+    with db() as c:
+        rows = c.execute('SELECT stream FROM permissions WHERE ref=?', (ref,)).fetchall()
+    return jsonify([r['stream'] for r in rows])
+
+@app.route('/auth/admin/permissions/<path:ref>', methods=['POST'])
+def admin_set_permissions(ref):
+    streams = (request.get_json(silent=True) or {}).get('streams', [])
+    with db() as c:
+        c.execute('DELETE FROM permissions WHERE ref=?', (ref,))
+        for s in streams:
+            s = s.strip()
+            if s:
+                c.execute('INSERT OR IGNORE INTO permissions (ref,stream) VALUES (?,?)', (ref, s))
     return jsonify(ok=True)
 
 # ── Email ─────────────────────────────────────────────────────────────────────
