@@ -35,6 +35,11 @@ def db():
 
 def init_db():
     with db() as c:
+        # Migrate: add ref column to existing sessions tables
+        try:
+            c.execute('ALTER TABLE sessions ADD COLUMN ref TEXT')
+        except Exception:
+            pass
         c.executescript('''
         CREATE TABLE IF NOT EXISTS emails (
             email TEXT PRIMARY KEY COLLATE NOCASE,
@@ -144,7 +149,7 @@ def api_streams():
     data = ome_get('/v1/vhosts/default/apps/live/streams')
     if not data:
         return jsonify(message='OK', response=[], statusCode=200)
-    allowed = get_allowed_streams(session['ref'])
+    allowed = get_allowed_streams(session['ref'] if session['ref'] else None)
     filtered = filter_stream_list(data.get('response', []), allowed)
     return jsonify(message='OK', response=filtered, statusCode=200)
 
@@ -152,7 +157,7 @@ def api_streams():
 def api_stream_detail(full_key):
     session = get_session()
     if not session: abort(401)
-    allowed = get_allowed_streams(session['ref'])
+    allowed = get_allowed_streams(session['ref'] if session['ref'] else None)
     if allowed is not None and '*' not in allowed and display_key(full_key) not in allowed:
         abort(403)
     data = ome_get(f'/v1/vhosts/default/apps/live/streams/{full_key}')
