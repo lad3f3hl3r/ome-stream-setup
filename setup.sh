@@ -78,16 +78,19 @@ EOF
 fi
 
 # ── Validate ──────────────────────────────────────────────────────────────────
-[[ -z "${DOMAIN:-}"         ]] && error "DOMAIN is required"
-[[ -z "${OME_HOST_IP:-}"   ]] && error "OME_HOST_IP is required"
-[[ -z "${OME_API_TOKEN:-}" ]] && error "OME_API_TOKEN is required"
-[[ -z "${STREAM_SECRET:-}" ]] && error "STREAM_SECRET is required"
-[[ -z "${ADMIN_PASSWORD:-}"]] && error "ADMIN_PASSWORD is required"
-[[ -z "${SMTP_HOST:-}"     ]] && error "SMTP_HOST is required"
+[[ -z "${DOMAIN:-}"          ]] && error "DOMAIN is required"
+[[ -z "${OME_HOST_IP:-}"    ]] && error "OME_HOST_IP is required"
+[[ -z "${OME_API_TOKEN:-}"  ]] && error "OME_API_TOKEN is required"
+[[ -z "${STREAM_SECRET:-}"  ]] && error "STREAM_SECRET is required"
+[[ -z "${ADMIN_PASSWORD:-}" ]] && error "ADMIN_PASSWORD is required"
+[[ -z "${SMTP_HOST:-}"      ]] && error "SMTP_HOST is required"
 TZ="${TZ:-Europe/Vienna}"
 TLS_MODE="${TLS_MODE:-certbot}"
-LLHLS_PORT="${LLHLS_PORT:-8090}"
-WEBRTC_PORT="${WEBRTC_PORT:-3334}"
+# Only default ports when not in proxy mode (proxy mode wants empty = no port suffix)
+if [[ "$TLS_MODE" != "proxy" ]]; then
+  LLHLS_PORT="${LLHLS_PORT:-8090}"
+  WEBRTC_PORT="${WEBRTC_PORT:-3334}"
+fi
 
 # ── Install Docker ────────────────────────────────────────────────────────────
 if ! command -v docker &>/dev/null; then
@@ -146,14 +149,16 @@ for f in index.html login.html admin.html; do
 done
 
 # Generate config.js
+LLHLS_JS=$([[ -n "${LLHLS_PORT}" ]] && echo "${LLHLS_PORT}" || echo "null")
+WEBRTC_JS=$([[ -n "${WEBRTC_PORT}" ]] && echo "${WEBRTC_PORT}" || echo "null")
 cat > "$INSTALL_DIR/nginx/html/config.js" <<EOF
 const STREAM_CONFIG = {
   gracePeriodMs  : 60 * 60 * 1000,
   pollIntervalMs : 5000,
   streamSecret   : '$STREAM_SECRET',
   streamSeparator: '~',
-  llhlsPort  : ${LLHLS_PORT:-null},
-  webrtcPort : ${WEBRTC_PORT:-null},
+  llhlsPort  : $LLHLS_JS,
+  webrtcPort : $WEBRTC_JS,
 };
 EOF
 
