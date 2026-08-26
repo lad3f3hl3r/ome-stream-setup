@@ -65,7 +65,9 @@ header h1{font-size:1.05rem;font-weight:600;letter-spacing:.4px}
 
 <script>
 // ── Player ────────────────────────────────────────────────────
-const HOST='stream.englaender.at';
+const HOST='@@DOMAIN@@';
+const LLHLS_PORT=STREAM_CONFIG.llhlsPort!=null?':'+STREAM_CONFIG.llhlsPort:'';
+const WS_PORT=STREAM_CONFIG.webrtcPort!=null?':'+STREAM_CONFIG.webrtcPort:'';
 let player=null, currentStream=null, audioMode=false;
 let qualityObserver=null;
 
@@ -135,9 +137,9 @@ function makeSources(){
   const state=streamState[currentStream];
   const fullKey=(state&&state.fullKey)||currentStream;
   if(audioMode){
-    return[{type:'hls',file:'https://'+HOST+':8090/live/'+encPath(fullKey+'_audio')+'/llhls.m3u8',label:'Audio'}];
+    return[{type:'hls',file:'https://'+HOST+LLHLS_PORT+'/live/'+encPath(fullKey+'_audio')+'/llhls.m3u8',label:'Audio'}];
   }
-  return[{type:'hls',file:'https://'+HOST+':8090/live/'+encPath(fullKey+'_abr')+'/llhls.m3u8',label:'HLS'}];
+  return[{type:'hls',file:'https://'+HOST+LLHLS_PORT+'/live/'+encPath(fullKey+'_abr')+'/llhls.m3u8',label:'HLS'}];
 }
 
 function onStateChanged(e){

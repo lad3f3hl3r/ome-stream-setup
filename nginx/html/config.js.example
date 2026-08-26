@@ -4,4 +4,8 @@ const STREAM_CONFIG = {
   pollIntervalMs : 5000,            // how often to check for active streams (ms)
   streamSecret   : 'changeme',      // must prefix every OBS stream key  →  changeme~StreamName
   streamSeparator: '~',             // separates secret from stream name
+
+  // Port config — set to null to omit the port (use default HTTPS/WSS port via reverse proxy)
+  llhlsPort  : 8090,  // LLHLS HTTPS port  — null for proxy mode (no explicit port)
+  webrtcPort : 3334,  // WebRTC WSS port   — null for proxy mode (no explicit port)
 };
