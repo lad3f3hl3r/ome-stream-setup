@@ -6,111 +6,201 @@
 <title>Admin — Live Streams</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0f0f0f;color:#eee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:32px 24px}
-h1{font-size:1.1rem;font-weight:600;color:#ccc;margin-bottom:32px;display:flex;align-items:center;gap:10px}
-h1 span{width:9px;height:9px;border-radius:50%;background:#c00;display:inline-block;animation:blink 1.5s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-.section{background:#1a1a1a;border:1px solid #252525;border-radius:12px;padding:24px;margin-bottom:24px;max-width:900px}
-h2{font-size:.85rem;font-weight:600;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px}
-.row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-input[type=text],input[type=email],input[type=number]{padding:9px 12px;background:#111;border:1px solid #222;border-radius:6px;color:#eee;font-size:.85rem;outline:none;flex:1;min-width:140px}
-input:focus{border-color:#444}
-.btn{padding:9px 16px;border:none;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:500;white-space:nowrap}
-.btn-primary{background:#c00;color:#fff}.btn-primary:hover{background:#d00}
-.btn-sm{padding:5px 10px;font-size:.78rem}
-.btn-ghost{background:#222;color:#999}.btn-ghost:hover{background:#2a2a2a;color:#ccc}
-.btn-danger{background:#3a1111;color:#c55}.btn-danger:hover{background:#4a1515;color:#e55}
-.btn-perm{background:#1a2a1a;color:#6ac060;border:1px solid #2a4a2a;padding:4px 10px;border-radius:4px;font-size:.78rem;cursor:pointer}
-.btn-perm:hover{background:#243a24}
-table{width:100%;border-collapse:collapse}
-th{text-align:left;font-size:.75rem;color:#555;letter-spacing:1px;text-transform:uppercase;padding:0 8px 10px 0;border-bottom:1px solid #222}
-td{padding:10px 8px 10px 0;border-bottom:1px solid #1a1a1a;font-size:.85rem;vertical-align:middle}
-td:last-child{text-align:right}
-.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:600}
-.tag-email{background:#1a2a3a;color:#6ab0e0}
-.tag-link{background:#1a2a1a;color:#6ac060}
-.empty{color:#444;font-size:.85rem;text-align:center;padding:20px 0}
-.url-cell{font-family:monospace;font-size:.78rem;color:#888;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.copy-btn{cursor:pointer;font-size:.78rem;color:#666;padding:2px 6px;border:1px solid #333;border-radius:4px;background:transparent}
-.copy-btn:hover{color:#ccc;border-color:#555}
-/* Permission panel */
-.perm-panel{display:none;background:#111;border:1px solid #222;border-radius:8px;padding:16px;margin-top:8px;margin-bottom:4px}
+:root{
+  --bg:#0a0a0f;--surface:#13131a;--surface2:#1a1a24;--border:#222230;
+  --text:#e2e2f0;--muted:#6b6b8a;--accent:#c00;--accent2:#e00;
+  --green:#2d6a4f;--green-text:#52b788;--blue:#1a3a5c;--blue-text:#74b3f0;
+  --red-bg:#3a0f0f;--red-text:#f07070;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+
+/* ── Header ── */
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;backdrop-filter:blur(8px)}
+.header-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);animation:pulse-dot 1.5s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse-dot{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(204,0,0,.4)}50%{opacity:.7;box-shadow:0 0 0 6px rgba(204,0,0,0)}}
+.header h1{font-size:1rem;font-weight:600;letter-spacing:.5px;color:var(--text)}
+.header-sub{font-size:.75rem;color:var(--muted);margin-left:auto}
+
+/* ── Layout ── */
+.page{max-width:960px;margin:0 auto;padding:24px 16px;display:flex;flex-direction:column;gap:20px}
+
+/* ── Cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.card-header{padding:20px 24px 0;display:flex;align-items:center;gap:10px}
+.card-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.icon-email{background:#1a2a3a}
+.icon-link{background:#1a2a1a}
+.icon-session{background:#2a1a2a}
+.card-title{font-size:.85rem;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.card-body{padding:20px 24px 24px}
+
+/* ── Add form ── */
+.add-form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.add-form input{flex:1;min-width:160px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:.875rem;outline:none;transition:border-color .15s}
+.add-form input:focus{border-color:#444460}
+.add-form input::placeholder{color:var(--muted)}
+
+/* ── Buttons ── */
+.btn{padding:10px 18px;border:none;border-radius:10px;cursor:pointer;font-size:.85rem;font-weight:600;transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2);transform:translateY(-1px)}
+.btn-sm{padding:6px 12px;font-size:.78rem;border-radius:8px}
+.btn-ghost{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:#444460}
+.btn-danger{background:var(--red-bg);color:var(--red-text);border:1px solid #5a1f1f}
+.btn-danger:hover{background:#4a1515}
+.btn-copy{background:var(--blue);color:var(--blue-text);border:1px solid #234870}
+.btn-copy:hover{background:#1e4470}
+.btn-perm{background:var(--green);color:var(--green-text);border:1px solid #1e4a38;padding:5px 12px;border-radius:8px;font-size:.78rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.btn-perm:hover{background:#265a3f}
+.btn-perm.open{background:#1a3a2a}
+
+/* ── Table ── */
+.table-wrap{overflow-x:auto;margin:0 -24px;padding:0 24px}
+table{width:100%;border-collapse:collapse;min-width:480px}
+th{text-align:left;font-size:.72rem;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;padding:0 12px 12px 0;border-bottom:1px solid var(--border);font-weight:600}
+td{padding:14px 12px 14px 0;border-bottom:1px solid var(--surface2);font-size:.875rem;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.015)}
+.td-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.url-cell{font-family:monospace;font-size:.75rem;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:600}
+.tag-email{background:var(--blue);color:var(--blue-text)}
+.tag-link{background:var(--green);color:var(--green-text)}
+.empty{color:var(--muted);font-size:.85rem;text-align:center;padding:32px 0;font-style:italic}
+
+/* ── Permission panel ── */
+.perm-row td{padding:0;border:none}
+.perm-panel{display:none;background:var(--bg);border-top:1px solid var(--border);padding:20px 24px;margin:0 -24px}
 .perm-panel.open{display:block}
-.perm-label{font-size:.75rem;color:#666;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
-.perm-options{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.perm-chip{display:inline-flex;align-items:center;gap:5px;background:#1e1e1e;border:1px solid #333;border-radius:16px;padding:4px 10px;font-size:.8rem;color:#bbb}
-.perm-chip button{background:none;border:none;color:#666;cursor:pointer;font-size:.9rem;line-height:1;padding:0}
-.perm-chip button:hover{color:#c55}
-.perm-add-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-.perm-add-row input{flex:1;min-width:120px;padding:6px 10px;background:#111;border:1px solid #2a2a2a;border-radius:6px;color:#eee;font-size:.82rem;outline:none}
-.perm-add-row input:focus{border-color:#444}
-.stream-pick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-.stream-pick button{padding:4px 10px;border:1px solid #2a2a2a;border-radius:14px;background:transparent;color:#888;font-size:.78rem;cursor:pointer}
-.stream-pick button:hover{border-color:#555;color:#ccc}
-.stream-pick button.sel{background:#1e3a2a;border-color:#2a6a4a;color:#4caf7d}
-.all-chip{background:#1a2a3a;border-color:#2a4a6a;color:#6ab0e0}
-/* Toast */
-.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1e3a2a;border:1px solid #2a6a4a;color:#4caf7d;padding:10px 20px;border-radius:8px;font-size:.85rem;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
-.toast.show{opacity:1}
+.perm-section-label{font-size:.72rem;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;font-weight:600;margin-bottom:10px}
+.stream-picks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.stream-pick-btn{padding:6px 14px;border:1.5px solid var(--border);border-radius:20px;background:transparent;color:var(--muted);font-size:.82rem;cursor:pointer;transition:all .15s}
+.stream-pick-btn:hover{border-color:#444460;color:var(--text)}
+.stream-pick-btn.sel{background:var(--green);border-color:#1e4a38;color:var(--green-text)}
+.stream-pick-btn.sel-all{background:var(--blue);border-color:#234870;color:var(--blue-text)}
+.perm-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;min-height:28px}
+.perm-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:.8rem;color:var(--text)}
+.perm-chip-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:0;display:flex;align-items:center}
+.perm-chip-remove:hover{color:var(--red-text)}
+.perm-add{display:flex;gap:8px;flex-wrap:wrap}
+.perm-add input{flex:1;min-width:160px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.83rem;outline:none}
+.perm-add input:focus{border-color:#444460}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--green);color:var(--green-text);padding:12px 22px;border-radius:12px;font-size:.85rem;font-weight:500;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:999;box-shadow:0 8px 32px rgba(0,0,0,.4);white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+
+/* ── Responsive ── */
+@media(max-width:600px){
+  .header{padding:14px 16px}
+  .header-sub{display:none}
+  .page{padding:16px 12px;gap:16px}
+  .card-header{padding:16px 16px 0}
+  .card-body{padding:16px}
+  .add-form{flex-direction:column}
+  .add-form input,.btn-primary{width:100%}
+  .btn-primary{justify-content:center}
+  .table-wrap{margin:0 -16px;padding:0 16px}
+  .perm-panel{padding:16px;margin:0 -16px}
+  .td-actions{flex-wrap:wrap}
+}
 </style>
 </head>
 <body>
-<h1><span></span> Stream Admin</h1>
 
-<div class="section">
-  <h2>Authorized Emails</h2>
-  <div class="row">
-    <input id="email-email" type="email" placeholder="email@example.com">
-    <input id="email-name" type="text" placeholder="Display name (optional)">
-    <button class="btn btn-primary" onclick="addEmail()">Add + send invite</button>
-  </div>
-  <table id="emails-table"><tr><td class="empty">Loading…</td></tr></table>
+<div class="header">
+  <div class="header-dot"></div>
+  <h1>Live Stream Admin</h1>
+  <span class="header-sub">devstream.englaender.at</span>
 </div>
 
-<div class="section">
-  <h2>Invite Links</h2>
-  <div class="row">
-    <input id="link-name" type="text" placeholder="Name (e.g. Noah Englaender)">
-    <input id="link-days" type="number" placeholder="Expires in days (optional)" min="1">
-    <button class="btn btn-primary" onclick="createLink()">Generate link</button>
-  </div>
-  <table id="links-table"><tr><td class="empty">Loading…</td></tr></table>
-</div>
+<div class="page">
 
-<div class="section">
-  <h2>Active Sessions</h2>
-  <button class="btn btn-ghost btn-sm" onclick="loadSessions()" style="margin-bottom:14px">Refresh</button>
-  <table id="sessions-table"><tr><td class="empty">Loading…</td></tr></table>
+  <!-- Emails -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon icon-email">✉️</div>
+      <div class="card-title">Authorized Emails</div>
+    </div>
+    <div class="card-body">
+      <div class="add-form">
+        <input id="email-email" type="email" placeholder="email@example.com" autocomplete="off">
+        <input id="email-name" type="text" placeholder="Display name (optional)">
+        <button class="btn btn-primary" onclick="addEmail()">Add &amp; invite</button>
+      </div>
+      <div class="table-wrap">
+        <table id="emails-table"><tr><td class="empty">Loading…</td></tr></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Links -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon icon-link">🔗</div>
+      <div class="card-title">Invite Links</div>
+    </div>
+    <div class="card-body">
+      <div class="add-form">
+        <input id="link-name" type="text" placeholder="Name (e.g. Noah Englaender)">
+        <input id="link-days" type="number" placeholder="Expires in days (optional)" min="1" style="max-width:200px">
+        <button class="btn btn-primary" onclick="createLink()">Generate</button>
+      </div>
+      <div class="table-wrap">
+        <table id="links-table"><tr><td class="empty">Loading…</td></tr></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sessions -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon icon-session">👥</div>
+      <div class="card-title">Active Sessions</div>
+    </div>
+    <div class="card-body">
+      <button class="btn btn-ghost btn-sm" onclick="loadSessions()" style="margin-bottom:16px">↺ Refresh</button>
+      <div class="table-wrap">
+        <table id="sessions-table"><tr><td class="empty">Loading…</td></tr></table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
 const api = (path, opts={}) => fetch('/auth/admin' + path, {headers:{'Content-Type':'application/json'}, ...opts}).then(r=>r.json());
-const rel = iso => { if(!iso) return '—'; return new Date(iso+'Z').toLocaleString(); };
+const rel = iso => { if(!iso) return '—'; return new Date(iso+'Z').toLocaleString(undefined,{dateStyle:'short',timeStyle:'short'}); };
 
 let activeStreams = [];
-let openPanel = null;  // currently open permission panel ref
+let openPanel = null;
 
-// ── Fetch active streams for permission picker ────────────────────────────────
 async function refreshActiveStreams(){
   activeStreams = await api('/streams').catch(()=>[]);
 }
 
 // ── Permission panel ──────────────────────────────────────────────────────────
-async function togglePerm(ref, btnEl){
-  const panelId = 'perm-' + btoa(ref).replace(/[^a-z0-9]/gi,'');
+async function togglePerm(ref, btn){
+  const panelId = 'perm-' + btoa(unescape(encodeURIComponent(ref))).replace(/[^a-z0-9]/gi,'');
   let panel = document.getElementById(panelId);
+
   if(panel && panel.classList.contains('open')){
-    panel.classList.remove('open'); openPanel=null; return;
+    panel.classList.remove('open'); btn.classList.remove('open'); openPanel=null; return;
   }
-  if(openPanel){ const op=document.getElementById(openPanel); if(op) op.classList.remove('open'); }
-  openPanel = panelId;
+  if(openPanel){
+    const op=document.getElementById(openPanel); if(op) op.classList.remove('open');
+    const ob=document.querySelector('.btn-perm.open'); if(ob) ob.classList.remove('open');
+  }
+  openPanel = panelId; btn.classList.add('open');
+
   if(!panel){
-    panel = document.createElement('div');
-    panel.id = panelId;
-    panel.className = 'perm-panel';
-    btnEl.closest('tr').insertAdjacentElement('afterend',
-      Object.assign(document.createElement('tr'), {innerHTML:`<td colspan="5" style="padding:0 0 8px 0"><div id="${panelId}" class="perm-panel"></div></td>`})
-    );
+    const row = btn.closest('tr');
+    const permTr = document.createElement('tr');
+    permTr.className = 'perm-row';
+    const cols = row.querySelectorAll('td').length;
+    permTr.innerHTML = `<td colspan="${cols}" style="padding:0"><div id="${panelId}" class="perm-panel"></div></td>`;
+    row.insertAdjacentElement('afterend', permTr);
     panel = document.getElementById(panelId);
   }
   panel.classList.add('open');
@@ -124,66 +214,57 @@ async function renderPermPanel(ref, panel){
   const specific = current.filter(s=>s!=='*');
 
   panel.innerHTML = `
-    <div class="perm-label">Stream access for <strong style="color:#ccc">${ref}</strong></div>
-    <div class="stream-pick" id="pick-${panel.id}">
-      <button class="btn ${isAll?'sel all-chip':''}" onclick="toggleAll('${panel.id}','${ref}',this)">★ All streams</button>
-      ${activeStreams.map(s=>`<button class="${specific.includes(s)?'sel':''}" onclick="toggleStream('${panel.id}','${ref}','${s}',this)">${s.replace(/_/g,' ')}</button>`).join('')}
+    <div class="perm-section-label">Stream access</div>
+    <div class="stream-picks" id="pick-${panel.id}">
+      <button class="stream-pick-btn ${isAll?'sel-all':''}" onclick="toggleAll('${panel.id}','${ref}',this)">★ All streams</button>
+      ${activeStreams.map(s=>`<button class="stream-pick-btn ${specific.includes(s)?'sel':''}" onclick="toggleStream('${panel.id}','${ref}','${s}',this)">${s.replace(/_/g,' ')}</button>`).join('')}
     </div>
-    <div class="perm-label" style="margin-top:10px">Custom / future streams</div>
-    <div id="chips-${panel.id}" class="perm-options">
+    <div class="perm-section-label">Custom / future streams</div>
+    <div id="chips-${panel.id}" class="perm-chips">
       ${specific.filter(s=>!activeStreams.includes(s)).map(s=>chipHtml(panel.id,ref,s)).join('')}
     </div>
-    <div class="perm-add-row">
+    <div class="perm-add">
       <input id="add-${panel.id}" placeholder="Type stream name (e.g. Stage_A)" onkeydown="if(event.key==='Enter')addCustomStream('${panel.id}','${ref}')">
       <button class="btn btn-ghost btn-sm" onclick="addCustomStream('${panel.id}','${ref}')">Add</button>
-    </div>
-  `;
+    </div>`;
 }
 
 function chipHtml(panelId, ref, stream){
-  return `<span class="perm-chip">${stream.replace(/_/g,' ')}<button onclick="removeCustomStream('${panelId}','${ref}','${stream}',this)" title="Remove">✕</button></span>`;
+  return `<span class="perm-chip">${stream.replace(/_/g,' ')}<button class="perm-chip-remove" onclick="removeCustomStream('${panelId}','${ref}','${stream}',this)" title="Remove">✕</button></span>`;
 }
 
 function getPickerState(panelId){
   const pick = document.getElementById('pick-'+panelId);
-  const allBtn = pick.querySelector('button:first-child');
-  if(allBtn.classList.contains('sel')) return ['*'];
-  const active = [...pick.querySelectorAll('button:not(:first-child)')].filter(b=>b.classList.contains('sel')).map(b=>b.textContent.trim().replace(/ /g,'_'));
-  const chips = [...(document.getElementById('chips-'+panelId)?.querySelectorAll('.perm-chip')||[])].map(c=>c.textContent.trim().replace('✕','').trim().replace(/ /g,'_'));
+  const allBtn = pick?.querySelector('button:first-child');
+  if(allBtn?.classList.contains('sel-all')) return ['*'];
+  const active=[...pick?.querySelectorAll('button:not(:first-child)')??[]].filter(b=>b.classList.contains('sel')).map(b=>b.textContent.trim().replace(/ /g,'_'));
+  const chips=[...(document.getElementById('chips-'+panelId)?.querySelectorAll('.perm-chip')??[])].map(c=>c.textContent.trim().replace('✕','').trim().replace(/ /g,'_'));
   return [...new Set([...active,...chips])];
 }
 
 async function savePerms(panelId, ref){
-  const streams = getPickerState(panelId);
-  await api('/permissions/'+encodeURIComponent(ref), {method:'POST', body:JSON.stringify({streams})});
+  await api('/permissions/'+encodeURIComponent(ref), {method:'POST', body:JSON.stringify({streams:getPickerState(panelId)})});
   showToast('Access updated');
 }
 
 async function toggleAll(panelId, ref, btn){
-  const isNowAll = !btn.classList.contains('sel');
-  btn.classList.toggle('sel', isNowAll);
-  // deselect specific streams if all selected
-  if(isNowAll) document.querySelectorAll(`#pick-${panelId} button:not(:first-child)`).forEach(b=>b.classList.remove('sel'));
+  btn.classList.toggle('sel-all');
+  if(btn.classList.contains('sel-all')) document.querySelectorAll(`#pick-${panelId} button:not(:first-child)`).forEach(b=>b.classList.remove('sel'));
   await savePerms(panelId, ref);
   await renderPermPanel(ref, document.getElementById(panelId));
 }
 
 async function toggleStream(panelId, ref, stream, btn){
-  const allBtn = document.querySelector(`#pick-${panelId} button:first-child`);
-  allBtn.classList.remove('sel');
+  document.querySelector(`#pick-${panelId} button:first-child`)?.classList.remove('sel-all');
   btn.classList.toggle('sel');
   await savePerms(panelId, ref);
 }
 
 async function addCustomStream(panelId, ref){
-  const inp = document.getElementById('add-'+panelId);
-  const val = inp.value.trim();
-  if(!val) return;
-  inp.value = '';
-  const allBtn = document.querySelector(`#pick-${panelId} button:first-child`);
-  allBtn.classList.remove('sel');
-  const chips = document.getElementById('chips-'+panelId);
-  chips.insertAdjacentHTML('beforeend', chipHtml(panelId, ref, val));
+  const inp=document.getElementById('add-'+panelId); const val=inp.value.trim(); if(!val) return;
+  inp.value='';
+  document.querySelector(`#pick-${panelId} button:first-child`)?.classList.remove('sel-all');
+  document.getElementById('chips-'+panelId)?.insertAdjacentHTML('beforeend', chipHtml(panelId,ref,val));
   await savePerms(panelId, ref);
 }
 
@@ -196,17 +277,18 @@ async function removeCustomStream(panelId, ref, stream, btn){
 async function loadEmails(){
   const rows = await api('/emails');
   const t = document.getElementById('emails-table');
-  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="5">No authorized emails yet.</td></tr>'; return; }
-  t.innerHTML = `<tr><th>Email</th><th>Name</th><th>Added</th><th>Access</th><th></th></tr>` +
-    rows.map(r=>`<tr>
+  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="4">No authorized emails yet.</td></tr>'; return; }
+  t.innerHTML = `<tr><th>Email</th><th>Name</th><th>Added</th><th></th></tr>` +
+    rows.map(r=>`
+    <tr data-email="${r.email}">
       <td>${r.email}</td>
-      <td>${r.name||'—'}</td>
-      <td>${rel(r.created_at)}</td>
-      <td><button class="btn-perm" onclick="togglePerm('${r.email}',this)">Streams ▾</button></td>
-      <td style="display:flex;gap:6px;justify-content:flex-end">
+      <td style="color:var(--muted)">${r.name||'—'}</td>
+      <td style="color:var(--muted);white-space:nowrap">${rel(r.created_at)}</td>
+      <td><div class="td-actions">
+        <button class="btn-perm" onclick="togglePerm('${r.email}',this)">Streams ▾</button>
         <button class="btn btn-sm btn-ghost" onclick="resendWelcome('${r.email}',this)">Resend link</button>
         <button class="btn btn-sm btn-danger" onclick="delEmail('${r.email}')">Remove</button>
-      </td>
+      </div></td>
     </tr>`).join('');
 }
 
@@ -217,8 +299,7 @@ async function addEmail(){
   const d = await api('/emails', {method:'POST', body:JSON.stringify({email,name})});
   document.getElementById('email-email').value='';
   document.getElementById('email-name').value='';
-  if(d.welcome_sent) showToast(`Added — welcome email sent to ${email}`);
-  else showToast(`Updated — ${email}`);
+  showToast(d.welcome_sent ? `✓ Added — welcome email sent to ${email}` : `✓ Updated — ${email}`);
   loadEmails();
 }
 
@@ -226,31 +307,32 @@ async function resendWelcome(email, btn){
   btn.disabled=true; btn.textContent='Sending…';
   const d = await api('/emails/'+encodeURIComponent(email)+'/resend', {method:'POST'});
   btn.disabled=false; btn.textContent='Resend link';
-  showToast(d.ok ? `Sign-in link resent to ${email}` : `Failed: ${d.error||'unknown'}`);
+  showToast(d.ok ? `✓ Link sent to ${email}` : `✗ ${d.error||'Failed'}`);
 }
 
 async function delEmail(email){
-  if(!confirm(`Remove ${email}?`)) return;
+  if(!confirm(`Remove ${email} and revoke their sessions?`)) return;
   await api('/emails/'+encodeURIComponent(email), {method:'DELETE'});
-  loadEmails(); loadSessions();
+  showToast('Removed'); loadEmails(); loadSessions();
 }
 
 // ── Links ─────────────────────────────────────────────────────────────────────
 async function loadLinks(){
   const rows = await api('/links');
   const t = document.getElementById('links-table');
-  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="6">No invite links yet.</td></tr>'; return; }
-  t.innerHTML = `<tr><th>Name</th><th>Link</th><th>Expires</th><th>Last used</th><th>Access</th><th></th></tr>` +
-    rows.map(r=>`<tr>
+  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="5">No invite links yet.</td></tr>'; return; }
+  t.innerHTML = `<tr><th>Name</th><th>URL</th><th>Expires</th><th>Last used</th><th></th></tr>` +
+    rows.map(r=>`
+    <tr>
       <td>${r.name||'—'}</td>
       <td class="url-cell" title="${r.url}">${r.url}</td>
-      <td>${rel(r.expires_at)}</td>
-      <td>${rel(r.last_used)}</td>
-      <td><button class="btn-perm" onclick="togglePerm('link:${r.key}',this)">Streams ▾</button></td>
-      <td style="display:flex;gap:6px;justify-content:flex-end">
-        <button class="btn btn-sm btn-ghost" onclick="copy('${r.url}',this)">Copy link</button>
+      <td style="color:var(--muted);white-space:nowrap">${rel(r.expires_at)}</td>
+      <td style="color:var(--muted);white-space:nowrap">${rel(r.last_used)}</td>
+      <td><div class="td-actions">
+        <button class="btn-perm" onclick="togglePerm('link:${r.key}',this)">Streams ▾</button>
+        <button class="btn btn-sm btn-copy" onclick="copy('${r.url}',this)">Copy link</button>
         <button class="btn btn-sm btn-danger" onclick="delLink('${r.key}')">Revoke</button>
-      </td>
+      </div></td>
     </tr>`).join('');
 }
 
@@ -258,16 +340,16 @@ async function createLink(){
   const name=document.getElementById('link-name').value.trim();
   const days=document.getElementById('link-days').value;
   const d = await api('/links', {method:'POST', body:JSON.stringify({name, expires_days:days||null})});
-  copy(d.url);
   document.getElementById('link-name').value='';
   document.getElementById('link-days').value='';
+  copy(d.url); showToast('✓ Link generated & copied');
   loadLinks();
 }
 
 async function delLink(key){
-  if(!confirm('Revoke this invite link? Active sessions will be ended.')) return;
+  if(!confirm('Revoke this invite link?')) return;
   await api('/links/'+key, {method:'DELETE'});
-  loadLinks(); loadSessions();
+  showToast('Revoked'); loadLinks(); loadSessions();
 }
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
@@ -276,33 +358,33 @@ async function loadSessions(){
   const t = document.getElementById('sessions-table');
   if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="5">No active sessions.</td></tr>'; return; }
   t.innerHTML = `<tr><th>Name</th><th>Type</th><th>IP</th><th>Last seen</th><th></th></tr>` +
-    rows.map(r=>`<tr>
+    rows.map(r=>`
+    <tr>
       <td>${r.name||'—'}</td>
-      <td><span class="tag tag-${r.source==='email'?'email':'link'}">${r.source==='email'?'Email':'Link'}</span></td>
-      <td>${r.ip||'—'}</td>
-      <td>${rel(r.last_seen)}</td>
+      <td><span class="tag tag-${r.source==='email'?'email':'link'}">${r.source==='email'?'✉ Email':'🔗 Link'}</span></td>
+      <td style="color:var(--muted);font-family:monospace;font-size:.8rem">${r.ip||'—'}</td>
+      <td style="color:var(--muted);white-space:nowrap">${rel(r.last_seen)}</td>
       <td><button class="btn btn-sm btn-danger" onclick="revokeSession('${r.token}')">Revoke</button></td>
     </tr>`).join('');
 }
 
 async function revokeSession(token){
   await api('/sessions/'+token, {method:'DELETE'});
-  loadSessions();
+  showToast('Session revoked'); loadSessions();
 }
 
 function copy(url, btn){
   navigator.clipboard.writeText(url).then(()=>{
-    if(btn){ btn.textContent='copied!'; setTimeout(()=>btn.textContent='copy',1500); }
-    else showToast('Link copied to clipboard');
+    if(btn){ const orig=btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=orig,1800); }
   });
 }
 
 let toastTimer;
 function showToast(msg){
-  let t=document.getElementById('toast');
-  if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);}
+  let t=document.getElementById('_toast');
+  if(!t){t=document.createElement('div');t.id='_toast';t.className='toast';document.body.appendChild(t);}
   t.textContent=msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3000);
 }
 
 loadEmails(); loadLinks(); loadSessions(); refreshActiveStreams();
