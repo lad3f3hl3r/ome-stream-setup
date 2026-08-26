@@ -243,11 +243,14 @@ async function loadLinks(){
   t.innerHTML = `<tr><th>Name</th><th>Link</th><th>Expires</th><th>Last used</th><th>Access</th><th></th></tr>` +
     rows.map(r=>`<tr>
       <td>${r.name||'—'}</td>
-      <td class="url-cell" title="${r.url}">${r.url} <button class="copy-btn" onclick="copy('${r.url}',this)">copy</button></td>
+      <td class="url-cell" title="${r.url}">${r.url}</td>
       <td>${rel(r.expires_at)}</td>
       <td>${rel(r.last_used)}</td>
       <td><button class="btn-perm" onclick="togglePerm('link:${r.key}',this)">Streams ▾</button></td>
-      <td><button class="btn btn-sm btn-danger" onclick="delLink('${r.key}')">Revoke</button></td>
+      <td style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-sm btn-ghost" onclick="copy('${r.url}',this)">Copy link</button>
+        <button class="btn btn-sm btn-danger" onclick="delLink('${r.key}')">Revoke</button>
+      </td>
     </tr>`).join('');
 }
 
