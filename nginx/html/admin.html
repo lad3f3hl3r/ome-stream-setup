@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Live Streams</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f0f0f;color:#eee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:32px 24px}
+h1{font-size:1.1rem;font-weight:600;color:#ccc;margin-bottom:32px;display:flex;align-items:center;gap:10px}
+h1 span{width:9px;height:9px;border-radius:50%;background:#c00;display:inline-block;animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.section{background:#1a1a1a;border:1px solid #252525;border-radius:12px;padding:24px;margin-bottom:24px;max-width:800px}
+h2{font-size:.85rem;font-weight:600;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px}
+.row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+input{padding:9px 12px;background:#111;border:1px solid #222;border-radius:6px;color:#eee;font-size:.85rem;outline:none;flex:1;min-width:140px}
+input:focus{border-color:#444}
+.btn{padding:9px 16px;border:none;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:500;white-space:nowrap}
+.btn-primary{background:#c00;color:#fff}
+.btn-primary:hover{background:#d00}
+.btn-sm{padding:5px 10px;font-size:.78rem}
+.btn-ghost{background:#222;color:#999}
+.btn-ghost:hover{background:#2a2a2a;color:#ccc}
+.btn-danger{background:#3a1111;color:#c55}
+.btn-danger:hover{background:#4a1515;color:#e55}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:.75rem;color:#555;letter-spacing:1px;text-transform:uppercase;padding:0 8px 10px 0;border-bottom:1px solid #222}
+td{padding:10px 8px 10px 0;border-bottom:1px solid #1a1a1a;font-size:.85rem;vertical-align:middle}
+td:last-child{text-align:right}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:600}
+.tag-email{background:#1a2a3a;color:#6ab0e0}
+.tag-link{background:#1a2a1a;color:#6ac060}
+.empty{color:#444;font-size:.85rem;text-align:center;padding:20px 0}
+.url-cell{font-family:monospace;font-size:.78rem;color:#888;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.copy-btn{cursor:pointer;font-size:.78rem;color:#666;padding:2px 6px;border:1px solid #333;border-radius:4px;background:transparent}
+.copy-btn:hover{color:#ccc;border-color:#555}
+</style>
+</head>
+<body>
+<h1><span></span> Stream Admin</h1>
+
+<div class="section">
+  <h2>Authorized Emails</h2>
+  <div class="row">
+    <input id="email-email" type="email" placeholder="email@example.com">
+    <input id="email-name" type="text" placeholder="Display name (optional)">
+    <button class="btn btn-primary" onclick="addEmail()">Add email</button>
+  </div>
+  <table id="emails-table"><tr><td class="empty">Loading…</td></tr></table>
+</div>
+
+<div class="section">
+  <h2>Invite Links</h2>
+  <div class="row">
+    <input id="link-name" type="text" placeholder="Name (e.g. Noah Englaender)">
+    <input id="link-days" type="number" placeholder="Expires in days (optional)" min="1">
+    <button class="btn btn-primary" onclick="createLink()">Generate link</button>
+  </div>
+  <table id="links-table"><tr><td class="empty">Loading…</td></tr></table>
+</div>
+
+<div class="section">
+  <h2>Active Sessions</h2>
+  <button class="btn btn-ghost btn-sm" onclick="loadSessions()" style="margin-bottom:14px">Refresh</button>
+  <table id="sessions-table"><tr><td class="empty">Loading…</td></tr></table>
+</div>
+
+<script>
+const api = (path, opts={}) => fetch('/auth/admin' + path, {headers:{'Content-Type':'application/json'}, ...opts}).then(r=>r.json());
+const rel = iso => { if(!iso) return '—'; const d=new Date(iso+'Z'); return d.toLocaleString(); };
+
+// ── Emails ────────────────────────────────────────────────────────────────────
+async function loadEmails(){
+  const rows = await api('/emails');
+  const t = document.getElementById('emails-table');
+  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="4">No authorized emails yet.</td></tr>'; return; }
+  t.innerHTML = `<tr><th>Email</th><th>Name</th><th>Added</th><th></th></tr>` +
+    rows.map(r=>`<tr>
+      <td>${r.email}</td>
+      <td>${r.name||'—'}</td>
+      <td>${rel(r.created_at)}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="delEmail('${r.email}')">Remove</button></td>
+    </tr>`).join('');
+}
+
+async function addEmail(){
+  const email=document.getElementById('email-email').value.trim();
+  const name=document.getElementById('email-name').value.trim();
+  if(!email) return;
+  await api('/emails', {method:'POST', body:JSON.stringify({email,name})});
+  document.getElementById('email-email').value='';
+  document.getElementById('email-name').value='';
+  loadEmails();
+}
+
+async function delEmail(email){
+  if(!confirm(`Remove ${email}?`)) return;
+  await api('/emails/'+encodeURIComponent(email), {method:'DELETE'});
+  loadEmails(); loadSessions();
+}
+
+// ── Links ─────────────────────────────────────────────────────────────────────
+async function loadLinks(){
+  const rows = await api('/links');
+  const t = document.getElementById('links-table');
+  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="5">No invite links yet.</td></tr>'; return; }
+  t.innerHTML = `<tr><th>Name</th><th>Link</th><th>Expires</th><th>Last used</th><th></th></tr>` +
+    rows.map(r=>`<tr>
+      <td>${r.name||'—'}</td>
+      <td class="url-cell" title="${r.url}">
+        ${r.url} <button class="copy-btn" onclick="copy('${r.url}',this)">copy</button>
+      </td>
+      <td>${rel(r.expires_at)}</td>
+      <td>${rel(r.last_used)}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="delLink('${r.key}')">Revoke</button></td>
+    </tr>`).join('');
+}
+
+async function createLink(){
+  const name=document.getElementById('link-name').value.trim();
+  const days=document.getElementById('link-days').value;
+  const d = await api('/links', {method:'POST', body:JSON.stringify({name, expires_days:days||null})});
+  copy(d.url);
+  document.getElementById('link-name').value='';
+  document.getElementById('link-days').value='';
+  loadLinks();
+}
+
+async function delLink(key){
+  if(!confirm('Revoke this invite link? Active sessions for it will be ended.')) return;
+  await api('/links/'+key, {method:'DELETE'});
+  loadLinks(); loadSessions();
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+async function loadSessions(){
+  const rows = await api('/sessions');
+  const t = document.getElementById('sessions-table');
+  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="5">No active sessions.</td></tr>'; return; }
+  t.innerHTML = `<tr><th>Name</th><th>Type</th><th>IP</th><th>Last seen</th><th></th></tr>` +
+    rows.map(r=>`<tr>
+      <td>${r.name||'—'}</td>
+      <td><span class="tag tag-${r.source==='email'?'email':'link'}">${r.source==='email'?'Email':'Link'}</span></td>
+      <td>${r.ip||'—'}</td>
+      <td>${rel(r.last_seen)}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="revokeSession('${r.token}')">Revoke</button></td>
+    </tr>`).join('');
+}
+
+async function revokeSession(token){
+  await api('/sessions/'+token, {method:'DELETE'});
+  loadSessions();
+}
+
+function copy(url, btn){
+  navigator.clipboard.writeText(url).then(()=>{
+    if(btn){ btn.textContent='copied!'; setTimeout(()=>btn.textContent='copy', 1500); }
+  });
+}
+
+loadEmails(); loadLinks(); loadSessions();
+</script>
+</body>
+</html>

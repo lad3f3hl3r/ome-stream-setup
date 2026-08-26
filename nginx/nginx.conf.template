@@ -14,7 +14,48 @@ server {
     root  /usr/share/nginx/html;
     index index.html;
 
+    # ── Auth check (internal, used by auth_request) ───────────────────────────
+    location = /auth/check {
+        internal;
+        proxy_pass http://auth:5000/auth/check;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    # ── Public auth endpoints ─────────────────────────────────────────────────
+    location /auth/ {
+        proxy_pass http://auth:5000/auth/;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # ── Invite link shortcut ──────────────────────────────────────────────────
+    location ~ ^/invite/(.+)$ {
+        proxy_pass http://auth:5000/auth/verify-link?key=$1;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # ── Admin (Basic Auth + admin API) ────────────────────────────────────────
+    location = /admin.html {
+        auth_basic "Admin";
+        auth_basic_user_file /etc/nginx/admin_htpasswd;
+        try_files $uri =404;
+    }
+    location /auth/admin/ {
+        auth_basic "Admin";
+        auth_basic_user_file /etc/nginx/admin_htpasswd;
+        proxy_pass http://auth:5000/auth/admin/;
+    }
+
+    # ── Login page (public) ───────────────────────────────────────────────────
+    location = /login.html {
+        try_files $uri =404;
+    }
+
+    # ── OME stream list API (proxied, auth_request protected) ─────────────────
     location /api/streams {
+        auth_request /auth/check;
+        error_page 401 = @login_redirect;
         proxy_pass http://host-gateway:8081/v1/vhosts/default/apps/live/streams;
         proxy_set_header Authorization "Basic @@OME_API_TOKEN_B64@@";
         proxy_hide_header Authorization;
@@ -22,15 +63,27 @@ server {
     }
 
     location ~ ^/api/stream/(.+)$ {
+        auth_request /auth/check;
+        error_page 401 = @login_redirect;
         proxy_pass http://host-gateway:8081/v1/vhosts/default/apps/live/streams/$1;
         proxy_set_header Authorization "Basic @@OME_API_TOKEN_B64@@";
         proxy_hide_header Authorization;
         add_header Cache-Control "no-store";
     }
 
+    # ── Pretty stream URL ─────────────────────────────────────────────────────
     location ~ ^/s/(.+)$ {
         return 302 /?stream=$1;
     }
 
-    location / { try_files $uri $uri/ =404; }
+    # ── Everything else: auth_request protected ───────────────────────────────
+    location / {
+        auth_request /auth/check;
+        error_page 401 = @login_redirect;
+        try_files $uri $uri/ =404;
+    }
+
+    location @login_redirect {
+        return 302 /login.html;
+    }
 }
