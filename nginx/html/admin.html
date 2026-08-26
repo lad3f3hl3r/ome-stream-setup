@@ -34,6 +34,8 @@ td:last-child{text-align:right}
 .url-cell{font-family:monospace;font-size:.78rem;color:#888;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .copy-btn{cursor:pointer;font-size:.78rem;color:#666;padding:2px 6px;border:1px solid #333;border-radius:4px;background:transparent}
 .copy-btn:hover{color:#ccc;border-color:#555}
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1e3a2a;border:1px solid #2a6a4a;color:#4caf7d;padding:10px 20px;border-radius:8px;font-size:.85rem;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1}
 </style>
 </head>
 <body>
@@ -79,7 +81,10 @@ async function loadEmails(){
       <td>${r.email}</td>
       <td>${r.name||'—'}</td>
       <td>${rel(r.created_at)}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="delEmail('${r.email}')">Remove</button></td>
+      <td style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-sm btn-ghost" onclick="resendWelcome('${r.email}',this)">Resend link</button>
+        <button class="btn btn-sm btn-danger" onclick="delEmail('${r.email}')">Remove</button>
+      </td>
     </tr>`).join('');
 }
 
@@ -87,10 +92,20 @@ async function addEmail(){
   const email=document.getElementById('email-email').value.trim();
   const name=document.getElementById('email-name').value.trim();
   if(!email) return;
-  await api('/emails', {method:'POST', body:JSON.stringify({email,name})});
+  const d = await api('/emails', {method:'POST', body:JSON.stringify({email,name})});
   document.getElementById('email-email').value='';
   document.getElementById('email-name').value='';
+  if(d.welcome_sent) showToast(`Added — welcome email sent to ${email}`);
+  else showToast(`Updated — ${email}`);
   loadEmails();
+}
+
+async function resendWelcome(email, btn){
+  btn.disabled=true; btn.textContent='Sending…';
+  const d = await api('/emails/'+encodeURIComponent(email)+'/resend', {method:'POST'});
+  btn.disabled=false; btn.textContent='Resend link';
+  if(d.ok) showToast(`Sign-in link resent to ${email}`);
+  else showToast(`Failed: ${d.error||'unknown error'}`);
 }
 
 async function delEmail(email){
@@ -156,6 +171,14 @@ function copy(url, btn){
   navigator.clipboard.writeText(url).then(()=>{
     if(btn){ btn.textContent='copied!'; setTimeout(()=>btn.textContent='copy', 1500); }
   });
+}
+
+let toastTimer;
+function showToast(msg){
+  let t=document.getElementById('toast');
+  if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);}
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
 }
 
 loadEmails(); loadLinks(); loadSessions();

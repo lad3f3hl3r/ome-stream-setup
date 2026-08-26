@@ -25,6 +25,7 @@ services:
       - SMTP_SSL=${SMTP_SSL:-false}
       - MAGIC_LINK_EXPIRE_MINUTES=${MAGIC_LINK_EXPIRE_MINUTES:-15}
       - SESSION_EXPIRE_DAYS=${SESSION_EXPIRE_DAYS:-7}
+      - WELCOME_LINK_EXPIRE_HOURS=${WELCOME_LINK_EXPIRE_HOURS:-72}
     volumes:
       - auth_data:/data
 

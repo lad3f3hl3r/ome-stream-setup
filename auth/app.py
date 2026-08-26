@@ -17,6 +17,7 @@ SMTP_SSL   = os.getenv('SMTP_SSL', 'false').lower() == 'true'   # true = SMTPS p
 SMTP_TLS   = os.getenv('SMTP_TLS', 'true').lower() == 'true'    # true = STARTTLS port 587
 LINK_TTL   = int(os.getenv('MAGIC_LINK_EXPIRE_MINUTES', '15'))
 SESSION_TTL= int(os.getenv('SESSION_EXPIRE_DAYS', '7'))
+WELCOME_TTL= int(os.getenv('WELCOME_LINK_EXPIRE_HOURS', '72')) * 60  # in minutes
 
 # ── Database ──────────────────────────────────────────────────────────────────
 def db():
@@ -168,9 +169,53 @@ def admin_add_email():
     email = d.get('email', '').strip().lower()
     name  = d.get('name', '').strip()
     if not email: return jsonify(error='Email required'), 400
+
     with db() as c:
+        is_new = c.execute('SELECT 1 FROM emails WHERE email=?', (email,)).fetchone() is None
         c.execute('INSERT OR REPLACE INTO emails (email,name) VALUES (?,?)', (email, name or None))
-    return jsonify(ok=True)
+
+    welcome_sent = False
+    if is_new:
+        try:
+            token = secrets.token_urlsafe(32)
+            with db() as c:
+                c.execute('INSERT INTO magic_tokens (token,email,expires_at) VALUES (?,?,?)',
+                          (token, email, future(minutes=WELCOME_TTL)))
+            link   = f"{BASE_URL}/auth/verify-magic?token={token}"
+            hours  = WELCOME_TTL // 60
+            greeting = f"Hi {name}," if name else "Hi,"
+            send_mail(email, 'You have been given access to the live stream viewer',
+                f"{greeting}\n\nYou have been added to the guest list for the live stream viewer.\n\n"
+                f"Click the link below to sign in (valid for {hours} hours):\n\n{link}\n\n"
+                f"After signing in you can request a new link at any time from the login page.")
+            welcome_sent = True
+        except Exception as e:
+            app.logger.error(f"Welcome email error for {email}: {e}")
+
+    return jsonify(ok=True, welcome_sent=welcome_sent)
+
+@app.route('/auth/admin/emails/<path:email>/resend', methods=['POST'])
+def admin_resend_welcome(email):
+    email = email.lower()
+    with db() as c:
+        row = c.execute('SELECT name FROM emails WHERE email=?', (email,)).fetchone()
+    if not row:
+        return jsonify(error='Email not found'), 404
+    token = secrets.token_urlsafe(32)
+    with db() as c:
+        c.execute('INSERT INTO magic_tokens (token,email,expires_at) VALUES (?,?,?)',
+                  (token, email, future(minutes=WELCOME_TTL)))
+    link  = f"{BASE_URL}/auth/verify-magic?token={token}"
+    name  = row['name'] or email
+    hours = WELCOME_TTL // 60
+    try:
+        send_mail(email, 'Your sign-in link for the live stream viewer',
+            f"Hi {name},\n\nHere is your sign-in link (valid for {hours} hours):\n\n{link}\n\n"
+            f"You can also request a new link at any time from the login page.")
+        return jsonify(ok=True)
+    except Exception as e:
+        app.logger.error(f"Resend error for {email}: {e}")
+        return jsonify(error='Failed to send email'), 500
 
 @app.route('/auth/admin/emails/<path:email>', methods=['DELETE'])
 def admin_del_email(email):
