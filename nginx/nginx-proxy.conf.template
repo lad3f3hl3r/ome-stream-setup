@@ -82,6 +82,6 @@ server {
     }
 
     location @login_redirect {
-        return 302 /login.html;
+        return 302 https://@@DOMAIN@@/login.html;
     }
 }
