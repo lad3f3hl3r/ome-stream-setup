@@ -145,7 +145,8 @@ for f in index.html login.html admin.html; do
 done
 
 # Generate config.js
-LLHLS_JS=$([[ -n "${LLHLS_PORT}" ]] && echo "${LLHLS_PORT}" || echo "null")
+# LLHLS always routed through nginx (/live/ proxy) — port null means no :PORT suffix
+LLHLS_JS="null"
 WEBRTC_JS=$([[ -n "${WEBRTC_PORT}" ]] && echo "${WEBRTC_PORT}" || echo "null")
 cat > "$INSTALL_DIR/nginx/html/config.js" <<EOF
 const STREAM_CONFIG = {

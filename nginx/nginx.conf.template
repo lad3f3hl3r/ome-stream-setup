@@ -52,6 +52,17 @@ server {
         try_files $uri =404;
     }
 
+    # ── LLHLS segments (proxied through nginx so only port 443 is needed) ────────
+    location /live/ {
+        auth_request /auth/check;
+        error_page 401 = @login_redirect;
+        proxy_pass http://host-gateway:8080/live/;
+        proxy_buffering off;
+        add_header Cache-Control "no-store";
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS";
+    }
+
     # ── OME stream API (auth + permission filtering handled by auth service) ─────
     location /api/streams {
         proxy_pass http://auth:5000/api/streams;
