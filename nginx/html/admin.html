@@ -143,8 +143,9 @@ tr:hover td{background:rgba(255,255,255,.015)}
     </div>
     <div class="card-body">
       <div class="add-form">
-        <input id="link-name" type="text" placeholder="Name (e.g. Noah Englaender)">
-        <input id="link-days" type="number" placeholder="Expires in days (optional)" min="1" style="max-width:200px">
+        <input id="link-name" type="text" placeholder="Name (e.g. Press, VIP, Group A)">
+        <input id="link-days" type="number" placeholder="Expires in days" min="1" style="max-width:160px">
+        <input id="link-maxuses" type="number" placeholder="Max uses (optional)" min="1" style="max-width:170px">
         <button class="btn btn-primary" onclick="createLink()">Generate</button>
       </div>
       <div class="table-wrap">
@@ -321,29 +322,45 @@ async function loadLinks(){
   const rows = await api('/links');
   const t = document.getElementById('links-table');
   if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="5">No invite links yet.</td></tr>'; return; }
-  t.innerHTML = `<tr><th>Name</th><th>URL</th><th>Expires</th><th>Last used</th><th></th></tr>` +
+  t.innerHTML = `<tr><th>Name</th><th>URL</th><th>Expires</th><th>Uses</th><th>Now watching</th><th></th></tr>` +
     rows.map(r=>`
     <tr>
       <td>${r.name||'—'}</td>
       <td class="url-cell" title="${r.url}">${r.url}</td>
       <td style="color:var(--muted);white-space:nowrap">${rel(r.expires_at)}</td>
-      <td style="color:var(--muted);white-space:nowrap">${rel(r.last_used)}</td>
+      <td style="color:var(--muted)">${r.uses_count||0}${r.max_uses?` / ${r.max_uses}`:''}</td>
+      <td>${r.session_count>0
+        ? `<span class="tag tag-link">● ${r.session_count} active</span>`
+        : `<span style="color:var(--muted)">—</span>`}</td>
       <td><div class="td-actions">
         <button class="btn-perm" onclick="togglePerm('link:${r.key}',this)">Streams ▾</button>
         <button class="btn btn-sm btn-copy" onclick="copy('${r.url}',this)">Copy link</button>
+        ${r.session_count>0?`<button class="btn btn-sm btn-ghost" onclick="kickLink('${r.key}',this)" title="Revoke all active sessions for this link">Kick all</button>`:''}
         <button class="btn btn-sm btn-danger" onclick="delLink('${r.key}')">Revoke</button>
       </div></td>
     </tr>`).join('');
 }
 
 async function createLink(){
-  const name=document.getElementById('link-name').value.trim();
-  const days=document.getElementById('link-days').value;
-  const d = await api('/links', {method:'POST', body:JSON.stringify({name, expires_days:days||null})});
+  const name     = document.getElementById('link-name').value.trim();
+  const days     = document.getElementById('link-days').value;
+  const maxUses  = document.getElementById('link-maxuses').value;
+  const d = await api('/links', {method:'POST', body:JSON.stringify({
+    name, expires_days:days||null, max_uses:maxUses||null
+  })});
   document.getElementById('link-name').value='';
   document.getElementById('link-days').value='';
+  document.getElementById('link-maxuses').value='';
   copy(d.url); showToast('✓ Link generated & copied');
   loadLinks();
+}
+
+async function kickLink(key, btn){
+  if(!confirm('Kick all active viewers using this link? They will need to re-open the link.')) return;
+  btn.disabled=true; btn.textContent='Kicking…';
+  const d = await api('/links/'+key+'/kick', {method:'POST'});
+  showToast(`✓ Kicked ${d.kicked} session${d.kicked!==1?'s':''}`);
+  loadLinks(); loadSessions();
 }
 
 async function delLink(key){

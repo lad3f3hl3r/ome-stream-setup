@@ -40,6 +40,13 @@ def init_db():
             c.execute('ALTER TABLE sessions ADD COLUMN ref TEXT')
         except Exception:
             pass
+        # Migrations for new columns
+        for migration in [
+            'ALTER TABLE links ADD COLUMN max_uses INTEGER',
+            'ALTER TABLE links ADD COLUMN uses_count INTEGER DEFAULT 0',
+        ]:
+            try: c.execute(migration)
+            except Exception: pass
         c.executescript('''
         CREATE TABLE IF NOT EXISTS emails (
             email TEXT PRIMARY KEY COLLATE NOCASE,
@@ -211,19 +218,26 @@ def verify_magic():
         c.execute('UPDATE magic_tokens SET used=1 WHERE token=?', (token,))
         em = c.execute('SELECT name FROM emails WHERE email=?', (row['email'],)).fetchone()
     name = (em['name'] if em and em['name'] else row['email'])
+    email = row['email']
+    # Dedup: revoke all existing sessions for this email before creating new one
+    with db() as c:
+        c.execute("DELETE FROM sessions WHERE source='email' AND ref=?", (email,))
     resp = make_response(redirect(BASE_URL + '/'))
-    return set_session_cookie(resp, make_session(name, row['email'], 'email'))
+    return set_session_cookie(resp, make_session(name, email, 'email'))
 
 # ── Invite link ───────────────────────────────────────────────────────────────
 @app.route('/auth/verify-link')
 def verify_link():
     key = request.args.get('key', '')
     with db() as c:
-        row = c.execute('SELECT name FROM links WHERE key=? AND (expires_at IS NULL OR expires_at>?)',
+        row = c.execute('SELECT name,max_uses,uses_count FROM links WHERE key=? AND (expires_at IS NULL OR expires_at>?)',
                         (key, now_str())).fetchone()
     if not row: return redirect(BASE_URL + '/login.html?error=invalid')
+    # Enforce max_uses if set
+    if row['max_uses'] and row['uses_count'] >= row['max_uses']:
+        return redirect(BASE_URL + '/login.html?error=invalid')
     with db() as c:
-        c.execute('UPDATE links SET last_used=? WHERE key=?', (now_str(), key))
+        c.execute('UPDATE links SET last_used=?, uses_count=uses_count+1 WHERE key=?', (now_str(), key))
     name = row['name'] or key
     ref  = f'link:{key}'
     resp = make_response(redirect(BASE_URL + '/'))
@@ -317,21 +331,38 @@ def admin_del_email(email):
 @app.route('/auth/admin/links', methods=['GET'])
 def admin_list_links():
     with db() as c:
-        rows = c.execute('SELECT key,name,expires_at,last_used,created_at FROM links ORDER BY created_at DESC').fetchall()
+        rows = c.execute('''
+            SELECT l.key, l.name, l.expires_at, l.last_used, l.created_at,
+                   l.max_uses, l.uses_count,
+                   COUNT(s.token) as session_count
+            FROM links l
+            LEFT JOIN sessions s ON s.ref = 'link:' || l.key AND s.expires_at > ?
+            GROUP BY l.key ORDER BY l.created_at DESC
+        ''', (now_str(),)).fetchall()
     return jsonify([{**dict(r), 'url': f"{BASE_URL}/invite/{r['key']}"} for r in rows])
 
 @app.route('/auth/admin/links', methods=['POST'])
 def admin_create_link():
     d = request.get_json(silent=True) or {}
-    name     = d.get('name', '').strip()
-    exp_days = d.get('expires_days')
+    name      = d.get('name', '').strip()
+    exp_days  = d.get('expires_days')
+    max_uses  = d.get('max_uses')
     key = secrets.token_urlsafe(12)
     exp = future(days=int(exp_days)) if exp_days else None
     ref = f'link:{key}'
     with db() as c:
-        c.execute('INSERT INTO links (key,name,expires_at) VALUES (?,?,?)', (key, name or None, exp))
+        c.execute('INSERT INTO links (key,name,expires_at,max_uses) VALUES (?,?,?,?)',
+                  (key, name or None, exp, int(max_uses) if max_uses else None))
         c.execute('INSERT OR IGNORE INTO permissions (ref,stream) VALUES (?,?)', (ref, '*'))
     return jsonify(key=key, url=f"{BASE_URL}/invite/{key}")
+
+@app.route('/auth/admin/links/<key>/kick', methods=['POST'])
+def admin_kick_link(key):
+    ref = f'link:{key}'
+    with db() as c:
+        count = c.execute('SELECT COUNT(*) FROM sessions WHERE ref=?', (ref,)).fetchone()[0]
+        c.execute('DELETE FROM sessions WHERE ref=?', (ref,))
+    return jsonify(ok=True, kicked=count)
 
 @app.route('/auth/admin/links/<key>', methods=['DELETE'])
 def admin_del_link(key):
