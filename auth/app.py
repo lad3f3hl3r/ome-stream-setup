@@ -146,7 +146,11 @@ def display_key(full_key):
     return full_key[len(prefix):] if full_key.startswith(prefix) else full_key
 
 def filter_stream_list(full_keys, allowed):
-    if allowed is None or '*' in allowed:
+    prefix = STREAM_SECRET + STREAM_SEP
+    # Always enforce prefix — streams without correct secret never shown to viewers
+    if prefix != STREAM_SEP:
+        full_keys = [k for k in full_keys if k.startswith(prefix)]
+    if '*' in allowed:
         return full_keys
     return [k for k in full_keys if display_key(k) in allowed]
 
