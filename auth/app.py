@@ -124,9 +124,9 @@ def get_allowed_streams(ref):
     with db() as c:
         rows = c.execute('SELECT stream FROM permissions WHERE ref=?', (ref,)).fetchall()
     if not rows:
-        return None  # None = no restrictions (all streams)
+        return set()  # no rows = no access (use * for all streams)
     allowed = {r['stream'] for r in rows}
-    return allowed  # '*' in set means all; otherwise specific names
+    return allowed  # '*' in set means all; otherwise specific names only
 
 def display_key(full_key):
     prefix = STREAM_SECRET + STREAM_SEP
@@ -155,10 +155,10 @@ def api_streams():
     filtered = filter_stream_list(data.get('response', []), allowed)
     # permitted: explicit list so frontend can immediately remove revoked streams.
     # null = all-stream user (no explicit list), array = specific permissions.
-    if allowed is None or '*' in allowed:
-        permitted = None
+    if '*' in allowed:
+        permitted = None  # explicit all-streams grant — no JS-side filtering
     else:
-        permitted = list(allowed)
+        permitted = list(allowed)  # specific list or [] for no access
     return jsonify(message='OK', response=filtered, permitted=permitted, statusCode=200)
 
 @app.route('/api/stream/<path:full_key>')
@@ -251,6 +251,8 @@ def admin_add_email():
     with db() as c:
         is_new = c.execute('SELECT 1 FROM emails WHERE email=?', (email,)).fetchone() is None
         c.execute('INSERT OR REPLACE INTO emails (email,name) VALUES (?,?)', (email, name or None))
+        if is_new:
+            c.execute('INSERT OR IGNORE INTO permissions (ref,stream) VALUES (?,?)', (email, '*'))
     welcome_sent = False
     if is_new:
         try:
@@ -315,8 +317,10 @@ def admin_create_link():
     exp_days = d.get('expires_days')
     key = secrets.token_urlsafe(12)
     exp = future(days=int(exp_days)) if exp_days else None
+    ref = f'link:{key}'
     with db() as c:
         c.execute('INSERT INTO links (key,name,expires_at) VALUES (?,?,?)', (key, name or None, exp))
+        c.execute('INSERT OR IGNORE INTO permissions (ref,stream) VALUES (?,?)', (ref, '*'))
     return jsonify(key=key, url=f"{BASE_URL}/invite/{key}")
 
 @app.route('/auth/admin/links/<key>', methods=['DELETE'])
