@@ -91,8 +91,10 @@ def make_session(name, ref, source):
     return token
 
 def set_session_cookie(resp, token):
-    resp.set_cookie('st', token, httponly=True, secure=True, samesite='Strict',
-                    max_age=SESSION_TTL * 86400, path='/')
+    from urllib.parse import urlparse
+    domain = urlparse(BASE_URL).hostname
+    resp.set_cookie('st', token, httponly=True, secure=True, samesite='Lax',
+                    max_age=SESSION_TTL * 86400, path='/', domain=domain)
     return resp
 
 def get_session():
@@ -379,4 +381,4 @@ def send_mail(to, subject, body):
             s.send_message(msg)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, threaded=True)
