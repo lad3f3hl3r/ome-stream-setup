@@ -85,7 +85,17 @@ def init_db():
             stream TEXT NOT NULL,
             PRIMARY KEY (ref, stream)
         );
+        CREATE TABLE IF NOT EXISTS prefixes (
+            prefix     TEXT PRIMARY KEY,
+            name       TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
         ''')
+    # Seed initial prefix from env if table is empty
+    if STREAM_SECRET:
+        with db() as c:
+            c.execute('INSERT OR IGNORE INTO prefixes (prefix,name) VALUES (?,?)',
+                      (STREAM_SECRET, 'Default'))
 
 init_db()
 
@@ -137,19 +147,29 @@ def get_allowed_streams(ref):
     with db() as c:
         rows = c.execute('SELECT stream FROM permissions WHERE ref=?', (ref,)).fetchall()
     if not rows:
-        return set()  # no rows = no access (use * for all streams)
-    allowed = {r['stream'] for r in rows}
-    return allowed  # '*' in set means all; otherwise specific names only
+        return set()
+    return {r['stream'] for r in rows}
+
+def get_prefixes():
+    """Return list of known prefix strings, longest first (avoids prefix-of-prefix collisions)."""
+    with db() as c:
+        rows = c.execute('SELECT prefix FROM prefixes ORDER BY LENGTH(prefix) DESC').fetchall()
+    return [r['prefix'] for r in rows]
 
 def display_key(full_key):
-    prefix = STREAM_SECRET + STREAM_SEP
-    return full_key[len(prefix):] if full_key.startswith(prefix) else full_key
+    """Strip whichever known prefix matches, return bare stream name."""
+    for p in get_prefixes():
+        sep = p + STREAM_SEP
+        if full_key.startswith(sep):
+            return full_key[len(sep):]
+    return full_key  # no known prefix matched
 
 def filter_stream_list(full_keys, allowed):
-    prefix = STREAM_SECRET + STREAM_SEP
-    # Always enforce prefix — streams without correct secret never shown to viewers
-    if prefix != STREAM_SEP:
-        full_keys = [k for k in full_keys if k.startswith(prefix)]
+    """Keep only streams that start with a known prefix, then apply permission filter."""
+    prefixes = get_prefixes()
+    if prefixes:
+        full_keys = [k for k in full_keys
+                     if any(k.startswith(p + STREAM_SEP) for p in prefixes)]
     if '*' in allowed:
         return full_keys
     return [k for k in full_keys if display_key(k) in allowed]
@@ -161,9 +181,9 @@ def ome_admission_webhook():
     data = request.get_json(silent=True) or {}
     # Stream key is the last segment of the RTMP/SRT URL
     url  = (data.get('request') or {}).get('url', '')
-    key  = url.rstrip('/').split('/')[-1] if url else ''
-    prefix = STREAM_SECRET + STREAM_SEP
-    allowed = key.startswith(prefix) if (prefix != STREAM_SEP and key) else True
+    key      = url.rstrip('/').split('/')[-1] if url else ''
+    prefixes = get_prefixes()
+    allowed  = any(key.startswith(p + STREAM_SEP) for p in prefixes) if (prefixes and key) else True
     app.logger.info(f"OME webhook: {key!r} → {'ALLOW' if allowed else 'DENY'}")
     return jsonify({'allowed': allowed})
 
@@ -445,6 +465,29 @@ def admin_set_permissions(ref):
     return jsonify(ok=True)
 
 # ── Email ─────────────────────────────────────────────────────────────────────
+@app.route('/auth/admin/prefixes', methods=['GET'])
+def admin_list_prefixes():
+    with db() as c:
+        rows = c.execute('SELECT prefix,name,created_at FROM prefixes ORDER BY created_at').fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/auth/admin/prefixes', methods=['POST'])
+def admin_add_prefix():
+    d = request.get_json(silent=True) or {}
+    prefix = d.get('prefix', '').strip()
+    name   = d.get('name', '').strip()
+    if not prefix: return jsonify(error='Prefix required'), 400
+    if STREAM_SEP in prefix: return jsonify(error=f'Prefix must not contain {STREAM_SEP!r}'), 400
+    with db() as c:
+        c.execute('INSERT OR IGNORE INTO prefixes (prefix,name) VALUES (?,?)', (prefix, name or None))
+    return jsonify(ok=True)
+
+@app.route('/auth/admin/prefixes/<prefix>', methods=['DELETE'])
+def admin_del_prefix(prefix):
+    with db() as c:
+        c.execute('DELETE FROM prefixes WHERE prefix=?', (prefix,))
+    return jsonify(ok=True)
+
 def send_mail(to, subject, body):
     msg = MIMEText(body)
     msg['Subject'] = subject

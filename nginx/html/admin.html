@@ -154,6 +154,25 @@ tr:hover td{background:rgba(255,255,255,.015)}
     </div>
   </div>
 
+  <!-- Stream Prefixes -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background:#2a1a2a">🔑</div>
+      <div class="card-title">Stream Prefixes</div>
+    </div>
+    <div class="card-body">
+      <p style="color:var(--muted);font-size:.82rem;margin-bottom:16px">Each prefix allows unlimited streams. OBS stream key format: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;color:#ccc">PREFIX~StreamName</code></p>
+      <div class="add-form">
+        <input id="pfx-prefix" type="text" placeholder="Prefix (e.g. djsdfsdf)" autocomplete="off" style="font-family:monospace">
+        <input id="pfx-name" type="text" placeholder="Label (e.g. Main Encoder)">
+        <button class="btn btn-primary" onclick="addPrefix()">Add prefix</button>
+      </div>
+      <div class="table-wrap">
+        <table id="prefixes-table"><tr><td class="empty">Loading…</td></tr></table>
+      </div>
+    </div>
+  </div>
+
   <!-- Sessions -->
   <div class="card">
     <div class="card-header">
@@ -404,7 +423,42 @@ function showToast(msg){
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3000);
 }
 
-loadEmails(); loadLinks(); loadSessions(); refreshActiveStreams();
+// ── Prefixes ──────────────────────────────────────────────────────────────────
+async function loadPrefixes(){
+  const rows = await api('/prefixes');
+  const t = document.getElementById('prefixes-table');
+  if(!rows.length){ t.innerHTML='<tr><td class="empty" colspan="4">No prefixes yet.</td></tr>'; return; }
+  t.innerHTML = `<tr><th>Prefix</th><th>Label</th><th>OBS stream key</th><th></th></tr>` +
+    rows.map(r=>`<tr>
+      <td style="font-family:monospace;color:var(--text)">${r.prefix}</td>
+      <td style="color:var(--muted)">${r.name||'—'}</td>
+      <td style="font-family:monospace;font-size:.78rem;color:var(--muted)">${r.prefix}~StreamName
+        <button class="copy-btn" onclick="copy('${r.prefix}~',this)" title="Copy prefix">copy</button>
+      </td>
+      <td><button class="btn btn-sm btn-danger" onclick="delPrefix('${r.prefix}')">Remove</button></td>
+    </tr>`).join('');
+}
+
+async function addPrefix(){
+  const prefix = document.getElementById('pfx-prefix').value.trim();
+  const name   = document.getElementById('pfx-name').value.trim();
+  if(!prefix) return;
+  const d = await api('/prefixes', {method:'POST', body:JSON.stringify({prefix,name})});
+  if(d.error){ showToast('✗ '+d.error); return; }
+  document.getElementById('pfx-prefix').value='';
+  document.getElementById('pfx-name').value='';
+  showToast('✓ Prefix added');
+  loadPrefixes();
+}
+
+async function delPrefix(prefix){
+  if(!confirm(`Remove prefix "${prefix}"? Streams using this prefix will no longer appear.`)) return;
+  await api('/prefixes/'+encodeURIComponent(prefix), {method:'DELETE'});
+  showToast('Prefix removed');
+  loadPrefixes();
+}
+
+loadEmails(); loadLinks(); loadPrefixes(); loadSessions(); refreshActiveStreams();
 </script>
 </body>
 </html>
