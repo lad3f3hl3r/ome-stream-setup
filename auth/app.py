@@ -155,6 +155,18 @@ def filter_stream_list(full_keys, allowed):
     return [k for k in full_keys if display_key(k) in allowed]
 
 # ── Auth check (nginx auth_request) ──────────────────────────────────────────
+# ── OME Admission Webhook ─────────────────────────────────────────────────────
+@app.route('/ome-hook', methods=['POST'])
+def ome_admission_webhook():
+    data = request.get_json(silent=True) or {}
+    # Stream key is the last segment of the RTMP/SRT URL
+    url  = (data.get('request') or {}).get('url', '')
+    key  = url.rstrip('/').split('/')[-1] if url else ''
+    prefix = STREAM_SECRET + STREAM_SEP
+    allowed = key.startswith(prefix) if (prefix != STREAM_SEP and key) else True
+    app.logger.info(f"OME webhook: {key!r} → {'ALLOW' if allowed else 'DENY'}")
+    return jsonify({'allowed': allowed})
+
 import random
 @app.route('/auth/check')
 def auth_check():

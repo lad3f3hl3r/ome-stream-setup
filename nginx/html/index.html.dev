@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Streams</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ovenplayer/dist/ovenplayer.css">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ovenplayer/dist/ovenplayer.js"></script>
+<script src="config.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f0f0f;color:#eee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+#player-screen{min-height:100vh}
+header{padding:14px 24px;background:#1a1a1a;border-bottom:1px solid #222;display:flex;align-items:center;gap:10px}
+.hblink{width:9px;height:9px;border-radius:50%;background:#c00;animation:blink 1.5s ease-in-out infinite}
+header h1{font-size:1.05rem;font-weight:600;letter-spacing:.4px}
+.toolbar{display:flex;align-items:center;gap:6px;padding:12px 24px;background:#1a1a1a;border-bottom:1px solid #222;flex-wrap:wrap}
+.tab,.audio-btn{padding:7px 14px;border:1px solid #2a2a2a;border-radius:6px;background:transparent;color:#888;cursor:pointer;font-size:.85rem;font-weight:500;transition:all .15s}
+.tab{padding:7px 18px}
+.tab:hover,.audio-btn:hover{border-color:#444;color:#ccc}
+.tab.active{background:#c00;border-color:#c00;color:#fff}
+.tab.reconnecting{background:#1c1400;border-color:#4a3300;color:#997733;animation:pulse 2s ease-in-out infinite}
+.tab.reconnecting.active{background:#3a2800;border-color:#7a5500;color:#ccaa44}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.audio-btn.active{background:#1e3a2a;border-color:#2a6a4a;color:#4caf7d}
+.sep{width:1px;height:24px;background:#2a2a2a;margin:0 4px;flex-shrink:0}
+.no-streams-tab{color:#555;font-size:.85rem;padding:7px 4px;font-style:italic}
+.tab-res{font-size:.72rem;opacity:.65;font-weight:400;margin-left:4px}
+.main{padding:24px;max-width:1100px;margin:0 auto}
+#player-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+#player{position:absolute;inset:0;width:100%;height:100%}
+#no-stream{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;pointer-events:none}
+#no-stream svg{opacity:.18}
+#no-stream .ns-title{font-size:1rem;font-weight:500;color:#555}
+#no-stream .ns-sub{font-size:.78rem;color:#383838}
+#status{margin-top:12px;font-size:.8rem;color:#555;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="player-screen">
+  <header><div class="hblink"></div><h1>Live Streams</h1></header>
+  <div class="toolbar">
+    <div id="stream-tabs" style="display:contents"><span class="no-streams-tab">No streams live</span></div>
+    <div class="sep"></div>
+    <button class="audio-btn" id="audio-toggle" onclick="toggleAudio()">&#127925; Audio Only</button>
+  </div>
+  <div class="main">
+    <div id="player-wrap">
+      <div id="player"></div>
+      <div id="no-stream">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+          <line x1="1" y1="1" x2="23" y2="23" stroke="#fff" stroke-width="1.5"/>
+        </svg>
+        <p class="ns-title">No streams live</p>
+        <p class="ns-sub">Streams will appear automatically when they go live</p>
+      </div>
+    </div>
+    <p id="status"></p>
+  </div>
+</div>
+
+<script>
+// ── Player ────────────────────────────────────────────────────
+const HOST='devstream.englaender.at';
+const LLHLS_PORT=STREAM_CONFIG.llhlsPort!=null?':'+STREAM_CONFIG.llhlsPort:'';
+const WS_PORT=STREAM_CONFIG.webrtcPort!=null?':'+STREAM_CONFIG.webrtcPort:'';
+let player=null, currentStream=null, audioMode=false;
+let qualityObserver=null;
+
+function showNoStream(on){
+  document.getElementById('no-stream').style.display=on?'flex':'none';
+}
+
+let qlLevels=[];
+
+function shortLabel(w,h,mbps){
+  // Find closest level by resolution + bitrate
+  const candidates=qlLevels.filter(l=>l.width===w&&l.height===h);
+  if(!candidates.length) return null;
+  const best=candidates.reduce((a,b)=>
+    Math.abs(a.bitrate/1e6-mbps)<Math.abs(b.bitrate/1e6-mbps)?a:b
+  );
+  const dupes=qlLevels.filter(l=>l.height===h).length>1;
+  let label=h>=2160?'4K':h>=1080?'1080p':h>=720?'720p':h>=480?'480p':h+'p';
+  if(dupes) label+=' · '+Math.round(best.bitrate/1e6)+'M';
+  return label;
+}
+
+// Pattern: "1920x1080, 5.1 Mbps (avc1 ,mp4a)" or similar
+const RX_QUALITY=/^(\d+)x(\d+),\s*([\d.]+)\s*Mbps/;
+
+function tryPatchNode(node){
+  const m=node.textContent.match(RX_QUALITY);
+  if(!m) return;
+  const label=shortLabel(parseInt(m[1]),parseInt(m[2]),parseFloat(m[3]));
+  if(label) node.textContent=label;
+}
+
+function patchAllTextNodes(root){
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  let n; while((n=walker.nextNode())) tryPatchNode(n);
+}
+
+function startQualityPatcher(){
+  if(qualityObserver) qualityObserver.disconnect();
+  qlLevels=(player&&player.getQualityLevels())||[];
+  const wrap=document.getElementById('player');
+  patchAllTextNodes(wrap);
+  qualityObserver=new MutationObserver(mutations=>{
+    mutations.forEach(mu=>{
+      if(mu.type==='childList'){
+        mu.addedNodes.forEach(n=>{
+          if(n.nodeType===1) patchAllTextNodes(n);
+          else if(n.nodeType===3) tryPatchNode(n);
+        });
+      }else if(mu.type==='characterData'){
+        tryPatchNode(mu.target);
+      }
+    });
+  });
+  qualityObserver.observe(wrap,{childList:true,subtree:true,characterData:true});
+}
+
+function stopQualityPatcher(){
+  if(qualityObserver){qualityObserver.disconnect();qualityObserver=null;}
+  qlLevels=[];
+}
+
+// OME doesn't decode %26 in path segments — keep & literal, encode everything else
+function encPath(s){return encodeURIComponent(s).replace(/%26/gi,'&');}
+
+function makeSources(){
+  const state=streamState[currentStream];
+  const fullKey=(state&&state.fullKey)||currentStream;
+  if(audioMode){
+    return[{type:'hls',file:'https://'+HOST+LLHLS_PORT+'/live/'+encPath(fullKey+'_audio')+'/llhls.m3u8',label:'Audio'}];
+  }
+  return[{type:'hls',file:'https://'+HOST+LLHLS_PORT+'/live/'+encPath(fullKey+'_abr')+'/llhls.m3u8',label:'HLS'}];
+}
+
+function onStateChanged(e){
+  const s=e.newstate;
+  if(s==='playing'){
+    const res=streamState[currentStream]&&streamState[currentStream].resolution;
+    document.getElementById('status').textContent='● Live'+(res?' · '+res:'');
+    startQualityPatcher();
+    patchQualityLabels();
+  }else if(s==='error'){
+    document.getElementById('status').textContent='Stream unavailable.';
+  }else if(s==='idle'){
+    document.getElementById('status').textContent='Stream ended.';
+  }
+}
+
+function load(){
+  showNoStream(false);
+  stopQualityPatcher();
+  document.getElementById('status').textContent='Connecting...';
+  const sources=makeSources();
+  if(player){
+    player.load(sources);
+    player.play();
+  }else{
+    document.getElementById('player').innerHTML='';
+    player=OvenPlayer.create('player',{autoStart:true,controls:true,sources,
+      hlsConfig:{startPosition:-1,liveSyncDurationCount:3}});
+    player.on('stateChanged',onStateChanged);
+    player.on('ready',()=>player.play());
+  }
+}
+
+function selectStream(key){
+  currentStream=key; audioMode=false;
+  document.getElementById('audio-toggle').classList.remove('active');
+  renderTabs();
+  load();
+}
+
+function toggleAudio(){
+  if(!currentStream)return;
+  const btn=document.getElementById('audio-toggle');
+  audioMode=!audioMode;
+  btn.classList.toggle('active',audioMode);
+  load();
+}
+
+// ── Dynamic streams ───────────────────────────────────────────
+const streamState={};
+
+async function pollStreams(){
+  try{
+    const res=await fetch('/api/streams');
+    if(!res.ok)return;
+    const data=await res.json();
+    // API returns [{key, name}] objects — no need for STREAM_SECRET client-side
+    const streams=data.response||[];
+    const activeNames=new Set(streams.map(s=>s.name));
+    const permitted=data.permitted||null;
+    const now=Date.now();
+
+    // Immediately remove streams revoked from this user — no grace period for permission changes
+    if(permitted!==null){
+      Object.keys(streamState).forEach(displayKey=>{
+        if(!permitted.includes(displayKey)){
+          delete streamState[displayKey];
+          if(currentStream===displayKey){
+            currentStream=null; audioMode=false;
+            document.getElementById('audio-toggle').classList.remove('active');
+            stopQualityPatcher();
+            if(player){player.remove();player=null;}
+            document.getElementById('player').innerHTML='';
+            document.getElementById('status').textContent='';
+            showNoStream(true);
+          }
+        }
+      });
+    }
+
+    streams.forEach(({key:fullKey, name:displayKey})=>{
+      if(!streamState[displayKey]){
+        streamState[displayKey]={lastSeen:now,status:'live',fullKey};
+        fetchStreamInfo(fullKey,displayKey);
+      }else{
+        const wasReconnecting=streamState[displayKey].status==='reconnecting';
+        streamState[displayKey].lastSeen=now;
+        streamState[displayKey].status='live';
+        streamState[displayKey].fullKey=fullKey;
+        if(wasReconnecting){
+          streamState[displayKey].height=0;
+          streamState[displayKey].resolution=null;
+          fetchStreamInfo(fullKey,displayKey);
+        }
+      }
+    });
+
+    Object.keys(streamState).forEach(displayKey=>{
+      const{fullKey}=streamState[displayKey];
+      if(!activeNames.has(displayKey)){
+        if(streamState[displayKey].status==='live') streamState[displayKey].status='reconnecting';
+        if(now-streamState[displayKey].lastSeen>STREAM_CONFIG.gracePeriodMs){
+          delete streamState[displayKey];
+          if(currentStream===displayKey){
+            currentStream=null; audioMode=false;
+            document.getElementById('audio-toggle').classList.remove('active');
+            stopQualityPatcher();
+            if(player){player.remove();player=null;}
+            document.getElementById('player').innerHTML='';
+            document.getElementById('status').textContent='';
+            showNoStream(true);
+          }
+        }
+      }
+    });
+
+    renderTabs();
+  }catch(e){}
+}
+
+async function fetchStreamInfo(fullKey,displayKey){
+  try{
+    const res=await fetch('/api/stream/'+encodeURIComponent(fullKey));
+    if(!res.ok)return;
+    const data=await res.json();
+    const resp=data.response;
+    if(!resp||!streamState[displayKey])return;
+    const inputTracks=(resp.input&&resp.input.tracks)||[];
+    const video=inputTracks.find(t=>t.type==='Video');
+    if(video&&video.video){
+      const{width,height}=video.video;
+      streamState[displayKey].height=height;
+      streamState[displayKey].resolution=formatResolution(width,height);
+    }
+    renderTabs();
+    if(currentStream===displayKey){
+      const statusEl=document.getElementById('status');
+      if(statusEl.textContent.startsWith('● Live')&&streamState[displayKey].resolution)
+        statusEl.textContent='● Live · '+streamState[displayKey].resolution;
+    }
+  }catch(e){}
+}
+
+function formatResolution(w,h){
+  if(h>=2160)return'4K';
+  if(h>=1080)return'1080p';
+  if(h>=720)return'720p';
+  if(h>=480)return'480p';
+  return h+'p';
+}
+
+function displayName(key){return key.replace(/_/g,' ');}
+
+function renderTabs(){
+  const container=document.getElementById('stream-tabs');
+  const keys=Object.keys(streamState);
+  if(keys.length===0){
+    container.innerHTML='<span class="no-streams-tab">No streams live</span>';
+    showNoStream(true);
+    return;
+  }
+  showNoStream(false);
+  const needed=new Set(keys);
+  container.querySelectorAll('.tab').forEach(b=>{if(!needed.has(b.dataset.key))b.remove();});
+  container.querySelectorAll('.no-streams-tab').forEach(el=>el.remove());
+  keys.forEach(key=>{
+    let btn=container.querySelector('.tab[data-key="'+CSS.escape(key)+'"]');
+    if(!btn){
+      btn=document.createElement('button');
+      btn.className='tab';
+      btn.dataset.key=key;
+      btn.onclick=()=>selectStream(key);
+      container.appendChild(btn);
+    }
+    const st=streamState[key];
+    btn.classList.toggle('active',currentStream===key);
+    btn.classList.toggle('reconnecting',st.status==='reconnecting');
+    const res=st.resolution?'<span class="tab-res">'+st.resolution+'</span>':'';
+    btn.innerHTML=displayName(key)+res;
+  });
+}
+
+// Auth is server-side (nginx auth_request) — page only loads for authenticated users
+const urlStream=new URLSearchParams(location.search).get('stream');
+pollStreams().then(()=>{ if(urlStream&&!currentStream) selectStream(urlStream); });
+setInterval(pollStreams,STREAM_CONFIG.pollIntervalMs);
+</script>
+</body>
+</html>
