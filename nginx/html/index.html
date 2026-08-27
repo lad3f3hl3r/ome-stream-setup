@@ -7,34 +7,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ovenplayer/dist/ovenplayer.css">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ovenplayer/dist/ovenplayer.js"></script>
-<script src="pins.js"></script>
 <script src="config.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0f0f0f;color:#eee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
-#pin-screen{position:fixed;inset:0;background:#0f0f0f;display:flex;align-items:center;justify-content:center;z-index:100;transition:opacity .3s}
-#pin-screen.out{opacity:0;pointer-events:none}
-.card{background:#1a1a1a;border:1px solid #252525;border-radius:20px;padding:44px 36px 36px;width:300px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.6)}
-.brand{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:32px}
-.blink{width:9px;height:9px;border-radius:50%;background:#c00;animation:blink 1.5s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-.brand-name{font-size:.95rem;font-weight:600;letter-spacing:.5px;color:#ccc}
-.label{font-size:.7rem;color:#555;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:18px}
-.dots{display:flex;justify-content:center;gap:11px;margin-bottom:32px;height:12px}
-.dot{width:12px;height:12px;border-radius:50%;background:#282828;border:1.5px solid #333;transition:all .15s}
-.dot.on{background:#c00;border-color:#c00;box-shadow:0 0 8px rgba(200,0,0,.5)}
-.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
-.key{padding:17px 10px;border:1px solid #222;border-radius:12px;background:#1e1e1e;color:#ddd;font-size:1.3rem;font-weight:500;cursor:pointer;transition:background .1s,transform .08s;user-select:none;-webkit-tap-highlight-color:transparent}
-.key:hover{background:#252525;border-color:#2e2e2e}
-.key:active{background:#2e2e2e;transform:scale(.93)}
-.key.sym{font-size:.95rem;color:#555}
-.key.ghost{visibility:hidden}
-.msg{margin-top:18px;min-height:1.1em;font-size:.78rem;color:#c00;opacity:0;transition:opacity .2s}
-.msg.show{opacity:1}
-@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-9px)}40%,80%{transform:translateX(9px)}}
-.shake{animation:shake .35s ease}
-#player-screen{display:none;min-height:100vh}
-#player-screen.on{display:block}
+#player-screen{min-height:100vh}
 header{padding:14px 24px;background:#1a1a1a;border-bottom:1px solid #222;display:flex;align-items:center;gap:10px}
 .hblink{width:9px;height:9px;border-radius:50%;background:#c00;animation:blink 1.5s ease-in-out infinite}
 header h1{font-size:1.05rem;font-weight:600;letter-spacing:.4px}
@@ -62,29 +40,6 @@ header h1{font-size:1.05rem;font-weight:600;letter-spacing:.4px}
 </head>
 <body>
 
-<div id="pin-screen">
-  <div class="card" id="card">
-    <div class="brand"><div class="blink"></div><span class="brand-name">Live Streams</span></div>
-    <p class="label">Enter PIN</p>
-    <div class="dots" id="dots"></div>
-    <div class="keypad">
-      <button class="key" onclick="press('1')">1</button>
-      <button class="key" onclick="press('2')">2</button>
-      <button class="key" onclick="press('3')">3</button>
-      <button class="key" onclick="press('4')">4</button>
-      <button class="key" onclick="press('5')">5</button>
-      <button class="key" onclick="press('6')">6</button>
-      <button class="key" onclick="press('7')">7</button>
-      <button class="key" onclick="press('8')">8</button>
-      <button class="key" onclick="press('9')">9</button>
-      <button class="key ghost"></button>
-      <button class="key" onclick="press('0')">0</button>
-      <button class="key sym" onclick="del()">&#x232B;</button>
-    </div>
-    <p class="msg" id="msg">Incorrect PIN</p>
-  </div>
-</div>
-
 <div id="player-screen">
   <header><div class="hblink"></div><h1>Live Streams</h1></header>
   <div class="toolbar">
@@ -109,23 +64,10 @@ header h1{font-size:1.05rem;font-weight:600;letter-spacing:.4px}
 </div>
 
 <script>
-// ── PIN ──────────────────────────────────────────────────────
-const PIN_LEN=6; let entered='';
-const dotsEl=document.getElementById('dots');
-for(let i=0;i<PIN_LEN;i++){const d=document.createElement('div');d.className='dot';d.id='dot'+i;dotsEl.appendChild(d);}
-function press(d){if(entered.length>=PIN_LEN)return;entered+=d;render();if(entered.length===PIN_LEN)verify();}
-function del(){entered=entered.slice(0,-1);render();}
-function render(){for(let i=0;i<PIN_LEN;i++)document.getElementById('dot'+i).classList.toggle('on',i<entered.length);}
-async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
-async function verify(){
-  const h=await sha256hex(entered);
-  if(window.PINS&&window.PINS.includes(h)){sessionStorage.setItem('auth','1');document.getElementById('pin-screen').classList.add('out');setTimeout(()=>showPlayer(),300);}
-  else{const card=document.getElementById('card'),msg=document.getElementById('msg');card.classList.add('shake');msg.classList.add('show');setTimeout(()=>{card.classList.remove('shake');msg.classList.remove('show');entered='';render();},1100);}
-}
-document.addEventListener('keydown',e=>{if(e.key>='0'&&e.key<='9')press(e.key);if(e.key==='Backspace')del();if(e.key==='Escape'){entered='';render();}});
-
 // ── Player ────────────────────────────────────────────────────
-const HOST='stream.englaender.at';
+const HOST='@@DOMAIN@@';
+const LLHLS_PORT=STREAM_CONFIG.llhlsPort!=null?':'+STREAM_CONFIG.llhlsPort:'';
+const WS_PORT=STREAM_CONFIG.webrtcPort!=null?':'+STREAM_CONFIG.webrtcPort:'';
 let player=null, currentStream=null, audioMode=false;
 let qualityObserver=null;
 
@@ -195,9 +137,9 @@ function makeSources(){
   const state=streamState[currentStream];
   const fullKey=(state&&state.fullKey)||currentStream;
   if(audioMode){
-    return[{type:'hls',file:'https://'+HOST+':8090/live/'+encPath(fullKey+'_audio')+'/llhls.m3u8',label:'Audio'}];
+    return[{type:'hls',file:'https://'+HOST+LLHLS_PORT+'/live/'+encPath(fullKey+'_audio')+'/llhls.m3u8',label:'Audio'}];
   }
-  return[{type:'hls',file:'https://'+HOST+':8090/live/'+encPath(fullKey+'_abr')+'/llhls.m3u8',label:'HLS'}];
+  return[{type:'hls',file:'https://'+HOST+LLHLS_PORT+'/live/'+encPath(fullKey+'_abr')+'/llhls.m3u8',label:'HLS'}];
 }
 
 function onStateChanged(e){
@@ -255,11 +197,11 @@ async function pollStreams(){
     if(!res.ok)return;
     const data=await res.json();
     const allKeys=new Set(data.response||[]);
-    const permitted=data.permitted||null; // null = all streams; array = specific allowed display names
+    const permitted=data.permitted||null; // null=all streams; array=specific allowed display names
     const now=Date.now();
     const prefix=STREAM_CONFIG.streamSecret+STREAM_CONFIG.streamSeparator;
 
-    // Immediately remove streams revoked from this user (no grace period)
+    // Immediately remove streams revoked from this user — no grace period for permission changes
     if(permitted!==null){
       Object.keys(streamState).forEach(displayKey=>{
         if(!permitted.includes(displayKey)){
@@ -381,17 +323,10 @@ function renderTabs(){
   });
 }
 
-function showPlayer(){
-  document.getElementById('pin-screen').style.display='none';
-  document.getElementById('player-screen').classList.add('on');
-  const urlStream=new URLSearchParams(location.search).get('stream');
-  pollStreams().then(()=>{
-    if(urlStream&&!currentStream) selectStream(urlStream);
-  });
-  setInterval(pollStreams,STREAM_CONFIG.pollIntervalMs);
-}
-
-if(sessionStorage.getItem('auth')==='1') showPlayer();
+// Auth is server-side (nginx auth_request) — page only loads for authenticated users
+const urlStream=new URLSearchParams(location.search).get('stream');
+pollStreams().then(()=>{ if(urlStream&&!currentStream) selectStream(urlStream); });
+setInterval(pollStreams,STREAM_CONFIG.pollIntervalMs);
 </script>
 </body>
 </html>
