@@ -59,6 +59,8 @@ def init_db():
             name       TEXT,
             expires_at TEXT,
             last_used  TEXT,
+            max_uses   INTEGER,
+            uses_count INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS magic_tokens (
