@@ -196,10 +196,11 @@ async function pollStreams(){
     const res=await fetch('/api/streams');
     if(!res.ok)return;
     const data=await res.json();
-    const allKeys=new Set(data.response||[]);
-    const permitted=data.permitted||null; // null=all streams; array=specific allowed display names
+    // API returns [{key, name}] objects — no need for STREAM_SECRET client-side
+    const streams=data.response||[];
+    const activeNames=new Set(streams.map(s=>s.name));
+    const permitted=data.permitted||null;
     const now=Date.now();
-    const prefix=STREAM_CONFIG.streamSecret+STREAM_CONFIG.streamSeparator;
 
     // Immediately remove streams revoked from this user — no grace period for permission changes
     if(permitted!==null){
@@ -219,9 +220,7 @@ async function pollStreams(){
       });
     }
 
-    allKeys.forEach(fullKey=>{
-      if(!fullKey.startsWith(prefix))return;
-      const displayKey=fullKey.slice(prefix.length);
+    streams.forEach(({key:fullKey, name:displayKey})=>{
       if(!streamState[displayKey]){
         streamState[displayKey]={lastSeen:now,status:'live',fullKey};
         fetchStreamInfo(fullKey,displayKey);
@@ -240,7 +239,7 @@ async function pollStreams(){
 
     Object.keys(streamState).forEach(displayKey=>{
       const{fullKey}=streamState[displayKey];
-      if(!allKeys.has(fullKey)){
+      if(!activeNames.has(displayKey)){
         if(streamState[displayKey].status==='live') streamState[displayKey].status='reconnecting';
         if(now-streamState[displayKey].lastSeen>STREAM_CONFIG.gracePeriodMs){
           delete streamState[displayKey];

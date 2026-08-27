@@ -2,8 +2,7 @@
 const STREAM_CONFIG = {
   gracePeriodMs  : 60 * 60 * 1000, // keep stream tab visible after drop (ms) — matches DVR window
   pollIntervalMs : 5000,            // how often to check for active streams (ms)
-  streamSecret   : 'changeme',      // must prefix every OBS stream key  →  changeme~StreamName
-  streamSeparator: '~',             // separates secret from stream name
+  // streamSecret is no longer in config.js — it stays server-side only
 
   // Port config — set to null to omit the port (use default HTTPS/WSS port via reverse proxy)
   llhlsPort  : 8090,  // LLHLS HTTPS port  — null for proxy mode (no explicit port)

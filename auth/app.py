@@ -35,7 +35,7 @@ def db():
 
 def init_db():
     with db() as c:
-        # Migrate: add ref column to existing sessions tables
+        c.execute('PRAGMA journal_mode=WAL')  # better concurrency under gunicorn
         try:
             c.execute('ALTER TABLE sessions ADD COLUMN ref TEXT')
         except Exception:
@@ -78,6 +78,9 @@ def init_db():
         ''')
 
 init_db()
+
+if not SMTP_SSL and not SMTP_TLS:
+    logging.warning('SMTP_SSL and SMTP_TLS are both false — email credentials sent in plaintext')
 
 def now_str(): return datetime.utcnow().isoformat()
 def future(days=0, minutes=0):
@@ -153,13 +156,15 @@ def api_streams():
         return jsonify(message='OK', response=[], statusCode=200)
     allowed = get_allowed_streams(session['ref'] if session['ref'] else None)
     filtered = filter_stream_list(data.get('response', []), allowed)
-    # permitted: explicit list so frontend can immediately remove revoked streams.
-    # null = all-stream user (no explicit list), array = specific permissions.
+    # Return {key, name} objects — client gets full key for URL construction
+    # but never needs to know STREAM_SECRET to reconstruct it
+    prefix = STREAM_SECRET + STREAM_SEP
+    streams = [{'key': k, 'name': k[len(prefix):] if k.startswith(prefix) else k} for k in filtered]
     if '*' in allowed:
-        permitted = None  # explicit all-streams grant — no JS-side filtering
+        permitted = None
     else:
-        permitted = list(allowed)  # specific list or [] for no access
-    return jsonify(message='OK', response=filtered, permitted=permitted, statusCode=200)
+        permitted = list(allowed)
+    return jsonify(message='OK', response=streams, permitted=permitted, statusCode=200)
 
 @app.route('/api/stream/<path:full_key>')
 def api_stream_detail(full_key):
@@ -227,6 +232,10 @@ def verify_link():
 # ── Logout ────────────────────────────────────────────────────────────────────
 @app.route('/auth/logout', methods=['POST'])
 def logout():
+    # CSRF protection: only accept same-origin requests
+    origin = request.headers.get('Origin', '')
+    if origin and not origin.startswith(BASE_URL):
+        abort(403)
     token = request.cookies.get('st')
     if token:
         with db() as c:
@@ -301,6 +310,7 @@ def admin_del_email(email):
         c.execute('DELETE FROM emails WHERE email=?', (email,))
         c.execute("DELETE FROM sessions WHERE source='email' AND ref=?", (email,))
         c.execute("DELETE FROM permissions WHERE ref=?", (email,))
+        c.execute("DELETE FROM magic_tokens WHERE email=?", (email,))  # revoke outstanding links
     return jsonify(ok=True)
 
 # ── Admin: invite links ───────────────────────────────────────────────────────

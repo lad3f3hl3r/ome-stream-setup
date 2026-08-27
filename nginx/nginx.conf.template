@@ -1,3 +1,6 @@
+# Rate limit: max 5 magic link requests per minute per IP
+limit_req_zone $binary_remote_addr zone=magic_link:10m rate=5r/m;
+
 server {
     listen 80;
     server_name @@DOMAIN@@;
@@ -23,7 +26,18 @@ server {
         proxy_set_header Cookie $http_cookie;
     }
 
+    # ── Security headers ──────────────────────────────────────────────────────
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "no-referrer" always;
+
     # ── Public auth endpoints ─────────────────────────────────────────────────
+    location /auth/request-link {
+        limit_req zone=magic_link burst=3 nodelay;
+        proxy_pass http://auth:5000/auth/request-link;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
     location /auth/ {
         proxy_pass http://auth:5000/auth/;
         proxy_set_header X-Real-IP $remote_addr;
