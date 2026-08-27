@@ -58,20 +58,20 @@
                     <KeyPath>/etc/letsencrypt/live/@@DOMAIN@@/privkey.pem</KeyPath>
                 </TLS>
             </Host>
+            <!-- Block RTMP/SRT streams without correct secret prefix -->
+            <AdmissionWebhooks>
+                <ControlServerUrl>http://127.0.0.1:5001/ome-hook</ControlServerUrl>
+                <SecretKey></SecretKey>
+                <Timeout>3000</Timeout>
+                <Enables>
+                    <Providers>rtmp,srt</Providers>
+                </Enables>
+            </AdmissionWebhooks>
+
             <Applications>
                 <Application>
                     <Name>live</Name>
                     <Type>live</Type>
-                    <!-- Block RTMP/SRT streams without correct secret prefix -->
-                    <AdmissionWebhooks>
-                        <ControlServerUrl>http://127.0.0.1:5001/ome-hook</ControlServerUrl>
-                        <SecretKey></SecretKey>
-                        <Timeout>3000</Timeout>
-                        <Enables>
-                            <Publishers>rtmp,srt</Publishers>
-                        </Enables>
-                    </AdmissionWebhooks>
-
                     <OutputProfiles>
 
                         <!-- WebRTC primary: full-quality bypass -->
