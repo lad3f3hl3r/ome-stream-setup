@@ -20,7 +20,8 @@ SMTP_SSL    = os.getenv('SMTP_SSL', 'false').lower() == 'true'
 SMTP_TLS    = os.getenv('SMTP_TLS', 'true').lower() == 'true'
 LINK_TTL    = int(os.getenv('MAGIC_LINK_EXPIRE_MINUTES', '15'))
 SESSION_TTL = int(os.getenv('SESSION_EXPIRE_DAYS', '7'))
-WELCOME_TTL = int(os.getenv('WELCOME_LINK_EXPIRE_HOURS', '72')) * 60
+WELCOME_TTL     = int(os.getenv('WELCOME_LINK_EXPIRE_HOURS', '72')) * 60
+ACTIVE_MINUTES  = int(os.getenv('SESSION_ACTIVE_MINUTES', '5'))  # window for "now watching"
 STREAM_SECRET = os.getenv('STREAM_SECRET', '')
 STREAM_SEP    = os.getenv('STREAM_SEPARATOR', '~')
 OME_API_URL   = os.getenv('OME_API_URL', 'http://host-gateway:8081')
@@ -148,9 +149,15 @@ def filter_stream_list(full_keys, allowed):
     return [k for k in full_keys if display_key(k) in allowed]
 
 # ── Auth check (nginx auth_request) ──────────────────────────────────────────
+import random
 @app.route('/auth/check')
 def auth_check():
     if not get_session(): abort(401)
+    # Occasionally clean up fully expired sessions (1% of requests)
+    if random.random() < 0.01:
+        with db() as c:
+            c.execute('DELETE FROM sessions WHERE expires_at<?', (now_str(),))
+            c.execute('DELETE FROM magic_tokens WHERE expires_at<?', (now_str(),))
     return '', 200
 
 # ── Stream list (session-authenticated + permission-filtered) ─────────────────
@@ -330,15 +337,17 @@ def admin_del_email(email):
 # ── Admin: invite links ───────────────────────────────────────────────────────
 @app.route('/auth/admin/links', methods=['GET'])
 def admin_list_links():
+    cutoff = future(minutes=-ACTIVE_MINUTES)
     with db() as c:
         rows = c.execute('''
             SELECT l.key, l.name, l.expires_at, l.last_used, l.created_at,
                    l.max_uses, l.uses_count,
                    COUNT(s.token) as session_count
             FROM links l
-            LEFT JOIN sessions s ON s.ref = 'link:' || l.key AND s.expires_at > ?
+            LEFT JOIN sessions s ON s.ref = 'link:' || l.key
+                AND s.expires_at > ? AND s.last_seen > ?
             GROUP BY l.key ORDER BY l.created_at DESC
-        ''', (now_str(),)).fetchall()
+        ''', (now_str(), cutoff)).fetchall()
     return jsonify([{**dict(r), 'url': f"{BASE_URL}/invite/{r['key']}"} for r in rows])
 
 @app.route('/auth/admin/links', methods=['POST'])
@@ -376,10 +385,12 @@ def admin_del_link(key):
 # ── Admin: sessions ───────────────────────────────────────────────────────────
 @app.route('/auth/admin/sessions', methods=['GET'])
 def admin_list_sessions():
+    cutoff = future(minutes=-ACTIVE_MINUTES)  # last_seen must be within ACTIVE_MINUTES
     with db() as c:
         rows = c.execute(
-            'SELECT token,name,source,created_at,last_seen,ip FROM sessions WHERE expires_at>? ORDER BY last_seen DESC',
-            (now_str(),)).fetchall()
+            'SELECT token,name,source,created_at,last_seen,ip FROM sessions '
+            'WHERE expires_at>? AND last_seen>? ORDER BY last_seen DESC',
+            (now_str(), cutoff)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.route('/auth/admin/sessions/<token>', methods=['DELETE'])
