@@ -153,7 +153,13 @@ def api_streams():
         return jsonify(message='OK', response=[], statusCode=200)
     allowed = get_allowed_streams(session['ref'] if session['ref'] else None)
     filtered = filter_stream_list(data.get('response', []), allowed)
-    return jsonify(message='OK', response=filtered, statusCode=200)
+    # permitted: explicit list so frontend can immediately remove revoked streams.
+    # null = all-stream user (no explicit list), array = specific permissions.
+    if allowed is None or '*' in allowed:
+        permitted = None
+    else:
+        permitted = list(allowed)
+    return jsonify(message='OK', response=filtered, permitted=permitted, statusCode=200)
 
 @app.route('/api/stream/<path:full_key>')
 def api_stream_detail(full_key):
